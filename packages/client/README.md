@@ -9,8 +9,8 @@ under Node, Bun and a compiled Bun binary.
 npm install @impz/client
 ```
 
-`@opentelemetry/api` is an optional peer: oRPC's type declarations name it, so a project that
-type-checks its dependencies (no `skipLibCheck`) installs it too.
+`@opentelemetry/api` is an optional peer. Install it too when your project type-checks its
+dependencies (no `skipLibCheck`), because oRPC's type declarations name it.
 
 ## Connect
 
@@ -25,8 +25,8 @@ const imp = createImpClient({
 
 - `url` is impd's API. A path prefix is kept, so impd can sit behind a proxy at `/impd/`.
 - `token` is the bearer token from `<IMP_DATA_DIR>/token`. It controls every imp on the host, so
-  keep it on a server. A browser app sends its requests through a proxy that adds the token, and
-  leaves `token` out.
+  keep it on a server. In a browser app, leave `token` out and send requests through a proxy that
+  adds the token.
 - `fetch` swaps the transport, for example to call an in-process app in tests.
 
 ## Imps, checkpoints and forks
@@ -51,16 +51,16 @@ to restart it anyway. While impd stops, calls fail with `SERVICE_UNAVAILABLE`, a
 restarts, `fetch` cannot connect; pass `{ retryUnavailable: { attempts, delayMs } }` to wait for it
 to come back. `RAM_BUDGET_EXCEEDED` is never retried.
 
-`watchEvents(imp, { onEvent })` follows `events.stream`: every imp first, then each change. `name`
-keeps one imp's events, and `reconnect: { delayMs }` opens a fresh stream whenever one ends, until
-impd refuses the call or `signal` aborts. A reconnect resumes after the last event the watch read,
-across impd restarts, so `onEvent` misses nothing. On a resumed stream, the watch also reads impd's
-`Position` events, which move its cursor past the events of imps the token may not see, and passes
-none of them on. It passes over an event kind it does not know, which a newer impd may send. When
-impd no longer holds the events since then, `onEvent` gets `Reset` and then every imp again.
-`onOpen` runs as each stream opens, with the cursor it opens at. A stream with no cursor, such as
-the first, starts with every imp, so code outside the watch may have missed what changed before it
-opened.
+`watchEvents(imp, { onEvent })` follows `events.stream`: every imp first, then each change. Pass
+`name` to follow one imp, and `reconnect: { delayMs }` to open a fresh stream whenever one ends,
+until impd refuses the call or `signal` aborts. A reconnect resumes after the last event the watch
+read, across impd restarts. While impd still holds the events since then, `onEvent` misses none of
+them. When impd no longer holds them, `onEvent` gets `Reset` and then every imp again. On a resumed
+stream, the watch also reads impd's `Position` events, which move its cursor past the events of imps
+the token may not see. It passes none of them on. The watch also skips an event kind it does not
+know, which a newer impd may send. `onOpen` runs as each stream opens, with the cursor it opens at.
+A stream with no cursor, such as the first, starts with every imp, so code outside the watch may
+have missed what changed before it opened.
 
 `openForwardTunnel` relays one connection to a port in the imp over `/tunnel`, and
 `openReverseForward` listens in the imp and relays each client back. `openToolExec` runs an agent
@@ -78,14 +78,15 @@ console.log(result.code, new TextDecoder().decode(result.stdout));
 ```
 
 `imp.openExec` streams the output instead, `imp.openConsole` opens a login shell with a tty, and a
-named session outlives the socket, so a client can attach to it again and resume where it stopped.
+named session outlives the socket, so you can attach to it again and resume where you left off.
 
 ## Errors, features and versions
 
 A failed call throws an `ORPCError` with impd's `code` and typed `data`; `safe` and `isDefinedError`
 narrow it. A call to a procedure that an older impd lacks throws an `UnknownProcedureError` instead.
-An older impd drops an input field it does not know, so `requireFeatures` checks the features a call
-needs first. `imp.checkServer()` tells whether impd speaks this client's API.
+An older impd drops an input field it does not know, so call `requireFeatures` first to check that
+impd has the features a call needs. Call `imp.checkServer()` to check whether impd speaks this
+client's API.
 
 ## Documentation
 

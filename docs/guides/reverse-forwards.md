@@ -2,8 +2,9 @@
 
 `impz proxy --reverse` lets a program in an imp reach a unix socket or a port on your machine: an
 agent in the imp talks to a service on your laptop, or a build in the imp reaches a database you run
-locally. It is `ssh -R` without SSH: it goes to impd with the CLI's token, and needs `exec` scope on
-the imp ([tokens](./tokens.md#scopes)). `ssh -R` works too ([SSH](./ssh.md#remote-forwards)).
+locally. It works like `ssh -R` without SSH: the CLI connects to impd with its token, which needs
+`exec` scope on the imp ([tokens](./tokens.md#scopes)). `ssh -R` works too
+([SSH](./ssh.md#remote-forwards)).
 
 ```sh
 impz proxy box --reverse /tmp/app.sock:/run/user/1000/app.sock   # a socket in the imp to one here
@@ -39,19 +40,20 @@ forward, such as `forwarding box:/tmp/app.sock -> /run/user/1000/app.sock`, and 
 - An open connection through a forward keeps the imp awake, as an `impz proxy` connection does. The
   forward alone does not: an imp with no traffic on it sleeps on its idle timeout.
 - A sleep ends the forward in the imp. The CLI then waits for the imp to wake, without waking it,
-  and listens again at the same path or port; it prints a notice each way. A port 0 forward may get
-  a new port. If the listener ended while the imp stayed awake, the CLI listens again after 30 s.
+  and listens again at the same path or port. It prints a notice when the forward ends and when it
+  listens again. A port 0 forward may get a new port. If the listener ended while the imp stayed
+  awake, the CLI listens again after 30 s.
 - When impd restarts, the CLI tries again every 2 s and listens once the imp runs.
 - The first listen wakes the imp. A forward that impd refuses ends the command with the reason, such
   as `LISTEN_FAILED: port 80 needs root in the imp; pick a port above 1023`.
 - Each forward is in the [audit log](./events.md#the-api-audit-log) as `reverse:<path or port>`.
 
-Reverse forwards need the imp's agent from protocol `0.9.0`; an older one answers `AGENT_OUTDATED`.
-Stop and start the imp to update it ([operations](./operations.md#upgrade)).
+Reverse forwards need the imp's agent at protocol `0.9.0` or later; an older agent replies
+`AGENT_OUTDATED`. Stop and start the imp to update it ([operations](./operations.md#upgrade)).
 
 ## From code
 
-`openReverseForward` in `@impz/client` opens a forward over impd's `/tunnel` socket. Its
-`onConnection` gets each client in the imp, for the caller to relay where it likes; `ended` says
-`lost` when a sleep ended the forward, and the caller listens again once the imp runs. The protocol
-is in [daemon](../architecture/network/ingress.md#tunnels-and-reverse-forwards).
+`openReverseForward` in `@impz/client` opens a forward over impd's `/tunnel` socket. Relay each
+client that `onConnection` receives from the imp wherever you like. When `ended` is `lost`, a sleep
+ended the forward: listen again once the imp runs. The protocol is in
+[daemon](../architecture/network/ingress.md#tunnels-and-reverse-forwards).

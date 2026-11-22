@@ -1,13 +1,13 @@
 # Install
 
-impz runs on one Linux machine, in one host container, in one of two ways:
+impz runs on one Linux machine, in one host container, as the release image or as the dev instance:
 
 - **The release image** for a server: impd, the `impz` CLI, the guest kernel and the system drive
-  are baked in, and nothing from the repo is mounted. [Bootstrap a server](#bootstrap-a-server) sets
-  up a fresh server with one command; [run the release image](#run-the-release-image) covers the
-  steps by hand.
+  are baked in, and nothing from the repo is mounted. To set up a fresh server with one command,
+  follow [bootstrap a server](#bootstrap-a-server); to do the steps by hand, follow
+  [run the release image](#run-the-release-image).
 - **The dev instance** for working on impz: `scripts/dev/dev.sh` builds the host container and runs
-  impd from the repo. The [set up](#set-up) steps below cover it.
+  impd from the repo. To run it, follow the [set up](#set-up) steps below.
 
 ## Needs
 
@@ -24,12 +24,12 @@ impz runs on one Linux machine, in one host container, in one of two ways:
   guest addresses and the broker's port rule need both. Most distribution kernels and WSL2 have
   them; `setup-net.sh` fails at start without them.
 - A Tailscale tailnet and a tagged auth key for it. Other machines reach impd and the imps through
-  the tailnet, and without one impd listens on the host's loopback only. One exception: a public imp
-  listens on every address ([public imps](./https.md#public-imps)). The
-  [Tailscale guide](./tailscale.md) covers the key and the ACL.
+  the tailnet, and without one impd listens on the host's loopback only. A public imp still listens
+  on every address ([public imps](./https.md#public-imps)). For the key and the ACL, follow the
+  [Tailscale guide](./tailscale.md).
 - [Bun](https://bun.sh) for the CLI, and Go for the guest agent.
-- Disk for the sparse XFS file. `IMP_STORAGE_GIB` (default 200) sets its apparent size; it uses only
-  what imps write.
+- Disk for the sparse XFS file. `IMP_STORAGE_GIB` (default 200) sets its apparent size; the file
+  takes only the space imps write.
 
 ## Set up
 
@@ -40,15 +40,15 @@ impz runs on one Linux machine, in one host container, in one of two ways:
    bun install
    ```
 
-2. Build the guest kernel. The first build takes about 9 minutes; the
-   [kernel runbook](../runbooks/kernel.md) has the details.
+2. Build the guest kernel. The first build takes about 9 minutes; for the details, see the
+   [kernel runbook](../runbooks/kernel.md).
 
    ```sh
    kernel/build.sh
    ```
 
-3. To put imps on your tailnet, write a tagged auth key to `.env` in the repo root. The
-   [Tailscale guide](./tailscale.md) covers the key and the ACL.
+3. To put imps on your tailnet, write a tagged auth key to `.env` in the repo root. For the key and
+   the ACL, follow the [Tailscale guide](./tailscale.md).
 
    ```sh
    TAILSCALE_AUTHKEY=tskey-auth-…
@@ -79,8 +79,8 @@ impz runs on one Linux machine, in one host container, in one of two ways:
 **NOTE:** The guides write `impz` for the CLI. From the repo, `scripts/impz` runs it; link it onto
 your `PATH` as `impz`, or use `scripts/impz` in its place.
 
-[Configuration](./configuration.md) lists every variable, and [operations](./operations.md) covers
-restarts and day-to-day care.
+For every variable, see [configuration](./configuration.md); for restarts and day-to-day care, see
+[operations](./operations.md).
 
 ## What `dev.sh up` does
 
@@ -107,8 +107,8 @@ restarts and day-to-day care.
 ## Bootstrap a server
 
 [`deploy/bootstrap.sh`](../../deploy/bootstrap.sh) takes a fresh Ubuntu 24.04 or 26.04, or Debian
-13, server, x86_64 with KVM, to a running impd. It is one file with no other repo files, so copy it
-to the server and run it as root. Take it from a release tag: it runs the image of its own release
+13, server, x86_64 with KVM, to a running impd. It needs no other file from the repo, so copy it to
+the server and run it as root. Take it from a release tag: it runs the image of its own release
 ([run the release image](#get-it)).
 
 <!-- x-release-please-start-version -->
@@ -128,7 +128,7 @@ use `sudo`, check first that `sudo --preserve-env=SSH_CONNECTION env | grep SSH_
 the variable, then run the script that way. `sudo -E` is not enough on Ubuntu 26.04, whose `sudo-rs`
 ignores `-E`. `--dry-run` prints every change and makes none. `--check` does the same and exits 2
 when a change is pending, 1 on an error or a refusal, and 0 when nothing is pending. A run changes
-only what differs from what it wants, so a second run changes nothing.
+only what differs from the state it sets up, so a second run changes nothing.
 
 **CAUTION:** `--data-device` formats the device. The script refuses a device that is mounted, has
 partitions, is a RAID or LVM member, holds the root filesystem, or has any signature but XFS (or,
@@ -157,8 +157,8 @@ The phases run in order:
   starts ksmd with zero-page merging at boot, applies it, and sets `IMP_KSM=1` in the env file. It
   refuses in a container and on a kernel older than 6.10. `--no-ksm` removes the rule, writes 2 to
   `/sys/kernel/mm/ksm/run`, which stops ksmd and unmerges every merged page, and sets `IMP_KSM=0`. A
-  running imp keeps its merge flag until it restarts, and impd logs each such VM it adopts. Off by
-  default: read the caution in [KSM](../architecture/lifecycle/ram-governor.md#ksm) first.
+  running imp keeps its merge flag until it restarts, and impd logs each such VM it adopts. KSM is
+  off by default; read the caution in [KSM](../architecture/lifecycle/ram-governor.md#ksm) first.
 - **firewall:** Disables `ufw` and `firewalld`, and loads `/etc/imp/firewall.nft` with
   `imp-firewall.service`, after `nft -c` accepts the ruleset. It refuses while `nftables.service` is
   enabled. With `--host-firewall none`, it does none of this ([Firewall](#firewall)).
@@ -172,10 +172,11 @@ The phases run in order:
   orders it after `zfs.target`.
 - **tailscale:** With a key in the env file, waits for the node to be `Running`, then blanks the key
   ([the Tailscale key](#the-tailscale-key)).
-- **health:** Waits for `impz info`, checks that `imp-host` publishes ports on `127.0.0.1` only, and
-  that a joined tailnet node is `Running`. With IPv6 on, it checks that the container has an IPv6
-  default route and that impd logged IPv6 on. Then it creates, runs `uname -a` in, and destroys an
-  imp from `ubuntu`, with 512 MiB. `--skip-health` skips it.
+- **health:** Waits for `impz info`, and checks that `imp-host` publishes ports on `127.0.0.1` only
+  and that a joined tailnet node is `Running`. The loopback check fails when public ports are set
+  ([Firewall](#firewall)). With IPv6 on, it checks that the container has an IPv6 default route and
+  that impd logged IPv6 on. Then it creates an imp from `ubuntu` with 512 MiB, runs `uname -a` in
+  it, and destroys it. `--skip-health` skips the phase.
 
 ### Disk layout
 
@@ -193,12 +194,12 @@ array or partition for impz in the installer and give that (`--data-device /dev/
 does not partition disks. OVH's default template gives the free space to `/home`; the script refuses
 that partition while it is mounted, so pick a layout without it in the installer.
 
-A host with no spare disk, such as a VPS with one virtual disk and no block volumes, takes
+On a host with no spare disk, such as a VPS with one virtual disk and no block volumes, pass
 `--loop-file /srv/imp.xfs`: a sparse XFS file on the root filesystem, loop-mounted on
 `/var/lib/imp`. By default it gets the free space on `/` less the larger of 30 GiB and 15 %, which
-the OS, Podman's images and logs keep; `--loop-size GIB` sets the size instead. The file is refused
-below 20 GiB. It puts a loop device in the I/O path, so prefer a disk or partition when there is
-one. ZFS needs a device; the script makes no pool on a file.
+the OS, Podman's images and logs keep; `--loop-size GIB` sets the size instead. The script refuses a
+file below 20 GiB. It puts a loop device in the I/O path, so prefer a disk or partition when there
+is one. ZFS needs a device; the script makes no pool on a file.
 
 ### ZFS
 
@@ -241,7 +242,7 @@ to half of RAM. On a 64 GB box:
 | `IMP_RAM_BUDGET_MIB`                    | 54,400  | 48,000  |
 
 On XFS that is about 170 awake imps at the 317 MiB that the end-to-end scale test measured for an
-imp filling 256 MiB, or 26 at 2 GiB each fully used. Sleeping imps cost disk, not RAM.
+imp filling 256 MiB, or 26 at 2 GiB each fully used. Sleeping imps cost only disk.
 
 The script writes the budget when the env file holds the template's `16384` or nothing. Any other
 value is yours and stays. On a host too small for the formula, where the budget comes out below 512
@@ -256,9 +257,9 @@ tailnet node; the host OS stays off the tailnet, and you reach it over public SS
 Use a tagged, non-ephemeral, single-use key ([Tailscale guide](./tailscale.md)). Once the node is
 `Running`, the script blanks the key in the env file: the node state in `/var/lib/imp/tailscale`
 keeps it joined, and `tailscale-up.sh` starts `tailscaled` from that state when there is no key. A
-later run with `--tailscale-authkey-file` sees the saved state and does not write the key again. An
-older image that still needs the key at every start keeps it, and the script warns. After the blank,
-the script restarts `imp-host`, so the key leaves the container's environment too.
+later run with `--tailscale-authkey-file` sees the saved state and does not write the key again. For
+an older image that still needs the key at every start, the script keeps the key and warns. After
+the blank, the script restarts `imp-host`, so the key leaves the container's environment too.
 
 Delete the `--tailscale-authkey-file` source after the run (the script reminds you); it is the only
 copy left. To join again (after the node was removed from the tailnet, say), delete
@@ -272,11 +273,13 @@ its next start. Put a new key in `/etc/imp/imp-host.env` before you roll back th
 
 The `inet imp_host` table filters input only, for IPv4 and IPv6 alike: loopback, established
 connections, ICMP and ICMPv6 (neighbour discovery and router adverts), the DHCP and DHCPv6 clients,
-and SSH. Every other port is closed on both, and `imp-host` publishes its ports on `127.0.0.1` only;
-the health phase fails when one is published on `0.0.0.0` or `::`. Podman's netavark keeps the
-forwarding rules, and a reload replaces this table alone. The SSH ports are those `sshd -T`,
-`ssh.socket` and the live `sshd` listeners report, plus `--ssh-port`. The script refuses the run
-when the current SSH session's port is not among them, and warns when `sshd` allows password logins.
+and SSH. Every other port is closed on both. `imp-host` publishes its ports on `127.0.0.1`, apart
+from the ports in `IMP_PUBLIC_PORTS`. The health phase checks that no port is published past
+loopback, and it counts the public ports too, so it fails on a host with public imps: there, run the
+script with `--skip-health`, and check the host by hand. Podman's netavark keeps the forwarding
+rules, and a reload replaces this table alone. The SSH ports are those `sshd -T`, `ssh.socket` and
+the live `sshd` listeners report, plus `--ssh-port`. The script refuses the run when the current SSH
+session's port is not among them, and warns when `sshd` allows password logins.
 
 On a host whose platform owns the firewall, run with `--host-firewall none`. The script then adds no
 host rules and leaves `ufw` and `firewalld` alone, and the env file records
@@ -315,7 +318,7 @@ in the host's namespace, where the host firewall drops its queries.
 - **Off again:** `--ipv6 off` stops `imp-host`, removes the network and the router advert file
   below, and `imp-host` comes back on the default bridge. Every imp that has an IPv6 prefix boots
   cold at its next start ([a new prefix](../architecture/network/networking.md#ipv6)). An env file
-  that says off beside the network is drift: `--check` exits 2, and `--yes` refuses.
+  set to off beside the network is drift: `--check` exits 2, and `--yes` refuses.
 
 **CAUTION:** netavark turns on `net.ipv6.conf.all.forwarding` for an IPv6 network. With forwarding
 on, the kernel ignores router adverts on an interface with `accept_ra=1`. A host whose IPv6 default
@@ -329,7 +332,7 @@ the host's IPv6 with it. The ipv6 phase settles this before it creates the netwo
   value stays until a reboot.
 - **A client takes them** (`accept_ra` is 0): systemd-networkd (and netplan, which uses it),
   NetworkManager or dhcpcd. networkd keeps them with forwarding on when the uplink's `.network` file
-  says `IPv6AcceptRA=yes` (netplan: `accept-ra: true`), and the script reads that. For any other
+  sets `IPv6AcceptRA=yes` (netplan: `accept-ra: true`), and the script reads that. For any other
   client, `--ipv6 on` stops, says which client it found, and asks you to check its config, and
   `auto` warns and stays off. Run again with `--ipv6 on --ra-handled` once the client keeps router
   adverts with forwarding on, and check `ip -6 route show default` half an hour later. A later run
@@ -341,8 +344,9 @@ on `br-imphost` (or `podman0`) reaches on the host itself. Make sure it drops in
 bridges to host services that imps must not reach, such as a k3s API or a database on a host
 address.
 
-A routed /64 instead of NAT66 is not automated: set `IMP_SUBNET6=<prefix>` and route the prefix to
-the container's address on `imp-host` ([IPv6](../architecture/network/networking.md#ipv6)).
+The script does not set up a routed /64 in place of NAT66. To use one, set `IMP_SUBNET6=<prefix>`
+and route the prefix to the container's address on `imp-host`
+([IPv6](../architecture/network/networking.md#ipv6)).
 
 ### Test it
 
@@ -350,16 +354,17 @@ the container's address on `imp-host` ([IPv6](../architecture/network/networking
 Debian 13 and Ubuntu 24.04 and 26.04, with a loop file and Podman inside. It checks `--check` on the
 fresh host, a first run, `--check` and a second run with no change. It fails when the host's `vm.*`
 and `kernel.*` sysctls or loaded modules change. In a container, the script writes the kernel
-settings and does not apply them; `accept_ra`, which is per network namespace, it applies. Each
-distro runs with `--ipv6 on`, as CI has no IPv6 route out. On Debian it also checks a network with
-another subnet, `accept_ra=2` on a dotted interface with a fake router-advert route, `--ipv6 off`,
-the refusal when a client takes the adverts, the `--data-device` refusals and what
-`--check --storage zfs` plans. With `--stub`, it then installs Docker, runs imp-host under Docker
-with the unit's arguments, and checks that `deploy/upgrade.sh` moves the host to Podman and that the
-moved container reads a file the Docker one wrote to `/var/lib/imp`. With `--health`, an imp also
-reaches an IPv6 address outside the container. `--zfs` adds a real ZFS run on Ubuntu 24.04, on a
-pool with a unique name that the test destroys; it needs the zfs module loaded on the host, which
-WSL2 does not have.
+settings and does not apply them, except `accept_ra`, which is per network namespace. Each distro
+runs with `--ipv6 on`, as CI has no IPv6 route out.
+
+On Debian, the test also checks a network with another subnet, `accept_ra=2` on a dotted interface
+with a fake router-advert route, `--ipv6 off`, the refusal when a client takes the adverts, the
+`--data-device` refusals and what `--check --storage zfs` plans. With `--stub`, it then installs
+Docker, runs imp-host under Docker with the unit's arguments, and checks that `deploy/upgrade.sh`
+moves the host to Podman and that the moved container reads a file the Docker one wrote to
+`/var/lib/imp`. With `--health`, an imp also reaches an IPv6 address outside the container. `--zfs`
+adds a real ZFS run on Ubuntu 24.04, on a pool with a unique name that the test destroys; it needs
+the zfs module loaded on the host, which WSL2 does not have.
 
 ```sh
 scripts/test-bootstrap.sh --stub --zfs                        # a stand-in image (what CI runs)
@@ -406,7 +411,7 @@ impz login https://imp.example.ts.net
 impz ls
 ```
 
-[Configuration](./configuration.md#cli) covers saved hosts, `--host` and shell completions.
+For saved hosts, `--host` and shell completions, see [configuration](./configuration.md#cli).
 
 ## Run the release image
 
@@ -437,17 +442,18 @@ sha256sum -c --ignore-missing SHA256SUMS && install -m 0755 impz-linux-x64 ~/.lo
 
 <!-- x-release-please-end -->
 
-The deploy files run the image of their own release: `deploy/bootstrap.sh` and the unit name
-`ghcr.io/zgeoff/imp-host:X.Y.Z`, the version in impz's `package.json`, and `deploy/upgrade.sh` moves
-the host to the release it comes from ([upgrade](./operations.md#upgrade)). On `main`,
-`package.json` holds the last release until the next one, so the files there can name an image older
-than their own code. Files from a release tag name that release's image, which is why
-[bootstrap a server](#bootstrap-a-server) fetches `bootstrap.sh` from one. A release tag's image
-appears on ghcr.io when `release.yml` pushes it, about 30 to 60 minutes after the tag.
+The deploy files run the image of their own release. `deploy/bootstrap.sh` and the unit name
+`ghcr.io/zgeoff/imp-host:X.Y.Z`, where X.Y.Z is the version in impz's `package.json`, and
+`deploy/upgrade.sh` moves the host to the release it comes from
+([upgrade](./operations.md#upgrade)). On `main`, `package.json` holds the last release until the
+next one, so the files there can name an image older than their own code. Files from a release tag
+name that release's image, which is why [bootstrap a server](#bootstrap-a-server) fetches
+`bootstrap.sh` from one. A release tag's image appears on ghcr.io when `release.yml` pushes it,
+about 30 to 60 minutes after the tag.
 
 To run another image, set `IMP_HOST_IMAGE`: in `/etc/imp/imp-host.env`, or with
-`bootstrap.sh --image`. Each release also moves the `latest` tag; pin it on purpose with
-`IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host`.
+`bootstrap.sh --image`. Each release also moves the `latest` tag; to run `latest`, choose it on
+purpose with `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host`.
 
 ### Build it
 
@@ -469,9 +475,9 @@ them alone does not change which drive or kernel the imps boot, and impd keeps a
 a snapshot needs it ([upgrades](./operations.md#upgrade)). Only these two files are reproducible;
 the image digest is not (apt packages, timestamps and the compiled impd differ per build).
 
-`scripts/release/check-reproducible.sh` checks it: one cold build, one on a fresh builder, and one
-after a change under `packages/`. It takes 5 to 20 minutes; the `Reproducible` workflow runs it in
-CI by hand.
+`scripts/release/check-reproducible.sh` checks that the two files are reproducible: one cold build,
+one on a fresh builder, and one after a change under `packages/`. It takes 5 to 20 minutes; to run
+it in CI, start the `Reproducible` workflow by hand.
 
 ### Prepare the host
 
@@ -496,9 +502,10 @@ CI by hand.
    ```
 
    Without `TAILSCALE_AUTHKEY` the host is local-only: the API and the proxy listen on
-   `127.0.0.1:7070` and `127.0.0.1:7080`, and no imp is reachable from another machine. With a key,
-   the tailnet reaches impd and every imp through the container's own `tailscaled`. Use a
-   non-ephemeral tagged key on a server ([Tailscale guide](./tailscale.md)).
+   `127.0.0.1:7070` and `127.0.0.1:7080`, and no imp but a [public](./https.md#public-imps) one is
+   reachable from another machine. With a key, the tailnet reaches impd and every imp through the
+   container's own `tailscaled`. Use a non-ephemeral tagged key on a server
+   ([Tailscale guide](./tailscale.md)).
 
 ### Start it
 
@@ -506,8 +513,8 @@ CI by hand.
 the foreground, so systemd supervises it. It runs with the privileges of
 [`deploy/imp-host.args.json`](../../deploy/imp-host.args.json)
 ([privileges](../architecture/host.md#privileges)) in a private cgroup namespace (for
-[CPU limits](./cpu-limits.md)) and `/var/lib/imp`, and gives impd 120 seconds to sleep every imp on
-stop. It needs the seccomp profile at `/etc/imp/imp-host.seccomp.json`:
+[CPU limits](./cpu-limits.md)) with `/var/lib/imp` mounted, and gives impd 120 seconds to sleep
+every imp on stop. It needs the seccomp profile at `/etc/imp/imp-host.seccomp.json`:
 
 ```sh
 install -D -m 0644 deploy/imp-host.seccomp.json /etc/imp/imp-host.seccomp.json
@@ -538,7 +545,6 @@ logs a warning at start.
 
 On a new host, impd's first start fetches its builder image (`IMP_BUILD_IMAGE`, the published
 `imp-base`, about 700 MB unpacked) from its registry and adds it as `imp-builder`. It then adds
-`ubuntu` in a builder imp. If the builder image does not fetch, every add and build fails with an
-error that names `IMP_BUILD_IMAGE`. The fetch has 10 minutes; one that hangs fails then, and the
-next add or build fetches again. A client that goes stops waiting for the fetch, which goes on for
-the others.
+`ubuntu` in a builder imp. If impd can't fetch the builder image, every add and build fails with an
+error that names `IMP_BUILD_IMAGE`. A fetch that hangs fails after 10 minutes, and the next add or
+build fetches again. A client that disconnects stops waiting, and the fetch goes on for the others.

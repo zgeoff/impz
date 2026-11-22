@@ -2,8 +2,10 @@
 
 A stand-in replaces, in tests, a boundary that impd, its clients or its scripts cross, such as a VM
 runner, a guest agent or a CLI that impd spawns. Give a new stand-in a test of its own beside it.
-Before you write one, search for an existing one. A stand-in's file name starts with `build-stub-`,
-`start-stub-`, `create-stub-` or `make-stub-`, and ends with what it replaces:
+Before you write one, search for an existing one. A stand-in kept in a file of its own has a name
+that starts with `build-stub-`, `start-stub-`, `create-stub-` or `make-stub-`, and ends with what it
+replaces. MSW handler sets, temporary directories and the clock have no such file, as
+[Kinds of stand-in](#kinds-of-stand-in) says. To find a stand-in file:
 
 ```bash
 find packages scripts -name node_modules -prune -o -name '*-stub-*.ts' ! -name '*.test.ts' -print | grep -i <boundary>
@@ -11,14 +13,15 @@ find packages scripts -name node_modules -prune -o -name '*-stub-*.ts' ! -name '
 
 Read a stand-in's test to learn what it models and which calls it throws on.
 
-The traps:
+Watch for these traps:
 
 - A component that calls `Date.now()` itself ignores the test clock. Check before you control time,
   as [Booting impd](#booting-impd) shows.
-- MSW (Mock Service Worker) sees only `fetch` calls in the test process. Use a real server for
-  anything else, as [Kinds of stand-in](#kinds-of-stand-in) lists.
-- Bun's idle timeouts end a silent request seconds later than the setting suggests.
-  [Bun timer and transport facts](#bun-timer-and-transport-facts) gives the numbers.
+- MSW (Mock Service Worker) answers only a `fetch` from the test process to a remote origin. It
+  passes a `fetch` to loopback or a unix socket through, and never sees any other call. Use a real
+  server for each of those, as [Kinds of stand-in](#kinds-of-stand-in) lists.
+- Bun's idle timeouts end a silent request seconds later than the setting suggests. For the numbers,
+  see [Bun timer and transport facts](#bun-timer-and-transport-facts).
 
 ## Contents
 
@@ -47,11 +50,11 @@ Choose the kind by the boundary that the code under test reaches:
   [`create-stub-docker-cli.ts`](../../../../packages/daemon/src/test-utils/imps/create-stub-docker-cli.ts).
   Each one keeps a model of the state behind the CLI and records the argv it got. Assert on the
   resulting state, and on the argv only when the argv is the contract.
-- **Real servers on loopback or a unix socket** answer a call that MSW can't see: a call over a unix
-  socket, from a `node:http` client, over a WebSocket, with real TLS checks, or from a child
-  process. Each is a `start-stub-*` file in a `src/test-utils/` folder; search there for the
-  service's name before you write one. When a server returns the calls it doesn't model, such as the
-  `unexpected` list of
+- **Real servers on loopback or a unix socket** answer a call that MSW passes through or can't see:
+  a `fetch` to loopback, and a call over a unix socket, from a `node:http` client, over a WebSocket,
+  with real TLS checks or from a child process. Each is a `start-stub-*` file in a `src/test-utils/`
+  folder; search there for the service's name before you write one. When a server returns the calls
+  it doesn't model, such as the `unexpected` list of
   [`startStubAcmeServer`](../../../../packages/daemon/src/test-utils/network/start-stub-acme-server.ts),
   assert that list empty in each test that uses the server.
 - **MSW handler sets** replace a remote HTTP API that impd calls at its real origin, such as
@@ -73,7 +76,7 @@ Choose the kind by the boundary that the code under test reaches:
   and `deploy/` run. Each stub logs its calls to one file and answers from a script that the test
   gives it.
 
-impd shrinks a guest's memory by unplugging memory from it. Three stand-ins model an unplug, and
+impd shrinks a guest's memory by unplugging memory from it. These stand-ins model an unplug, and
 each applies it at a different time. Pick the one whose timing the code under test expects:
 
 - the fake VMM applies the unplug when the request arrives;
@@ -115,15 +118,16 @@ grep -nw "now" packages/daemon/src/impd/create-impd.ts
 grep -rln "Date.now()" packages/daemon/src --include='*.ts' | grep -v '\.test\.ts$'
 ```
 
-A hit in the first search on the call that builds your component means it gets impd's clock. A hit
-in the second on your component's file means it reads the wall clock. Then give the component a
-`now` parameter. Pass `now` to it from `createImpd`.
+A hit in the first search on the call that builds your component means it gets impd's clock, with
+one exception: the imp service's sleep wait, below, which needs `frozenClockMs` as well. A hit in
+the second on your component's file means it reads the wall clock. In that case, give the component
+a `now` parameter, and pass `now` to it from `createImpd`.
 
 The imp service's sleep timing takes a clock of its own: the wait before it sleeps a guest that just
 booted. `startTestImpd` gives that wait the harness's clock only when you pass `frozenClockMs`.
 Without `frozenClockMs`, the wait runs on the wall clock.
 
-Three harnesses build on `startTestImpd`:
+These harnesses build on `startTestImpd`:
 
 - **The impd pool**,
   [`createTestImpdPool`](../../../../packages/daemon/src/test-utils/imps/create-test-impd-pool.ts),
@@ -132,10 +136,10 @@ Three harnesses build on `startTestImpd`:
   drops that impd, and the next case boots a fresh one.
 - **The move hosts**,
   [`createMoveHosts`](../../../../packages/daemon/src/test-utils/imp-ops/create-move-hosts.ts),
-  start a source impd and a target impd for a move. `setupMoveHosts`, in the same file, calls it
-  with a stack it registers itself. Pass a fetch hook to see every request the source sends to the
-  target. The fake VMM numbers VMs from 1 on each host, so match the two hosts' VMs by imp, never by
-  the VM's number.
+  start a source impd and a target impd for a move. `setupMoveHosts`, in the same file, registers a
+  stack itself and calls `createMoveHosts` with it. Pass a fetch hook to see every request the
+  source sends to the target. The fake VMM numbers VMs from 1 on each host, so match the two hosts'
+  VMs by imp, never by the VM's number.
 - **The CLI's impd host**,
   [`startImpdHost`](../../../../packages/cli/src/test-utils/start-impd-host.ts), runs one real impd
   per saved host, each with its own data dir, database, port and root token, for CLI tests that
@@ -173,8 +177,8 @@ impd's broker forwards a guest's request for an outside host that a grant allows
 the file to a test server. It still checks certificates, against the file's CA.
 
 In a daemon test, pass `IMP_BROKER_TEST_UPSTREAMS` in the `env` option of `startTestImpd`, with
-`IMP_SUBNET` set to a loopback range, so that a loopback address counts as a guest. The broker
-proxy's test, which also shows the file's format,
-[`create-broker-proxy.test.ts`](../../../../packages/daemon/src/network/broker/proxy/create-broker-proxy.test.ts),
-does this. The dev instance and the `connectors` end-to-end suite use the same file, as the
+`IMP_SUBNET` set to a loopback range, so that a loopback address counts as a guest. For an example,
+and for the file's format, see the broker proxy's test,
+[`create-broker-proxy.test.ts`](../../../../packages/daemon/src/network/broker/proxy/create-broker-proxy.test.ts).
+The dev instance and the `connectors` end-to-end suite use the same file, as the
 [development runbook](../../../../docs/runbooks/development.md#end-to-end-tests) describes.

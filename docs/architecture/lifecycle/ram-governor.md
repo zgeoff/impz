@@ -24,12 +24,12 @@ To answer for one VM, the kernel walks every page that VM maps, which takes long
 the guest uses. The governor therefore reads every awake VM's summary at once, off impd's event
 loop. One read after another would hold every other request until the last read ended.
 
-An admission skips that walk while the budget is far. The kernel keeps a count of each process's
-resident anonymous and shared pages, and the governor reads that count without a page walk. A page
-counts in full there and at most in full in the summary, so the counts never fall below what the
-summaries would hold at the same moment, with KSM or without it. The governor sums the counts as it
-sums the summaries, and when that sum and the new reservation fit the budget, it admits with no
-walk. When they do not fit, it reads every summary and makes room as below.
+An admission skips that walk while use is well under the budget. The kernel keeps a count of each
+process's resident anonymous and shared pages, and the governor reads that count without a page
+walk. A page counts in full there and at most in full in the summary, so the counts never fall below
+what the summaries would hold at the same moment, with KSM or without it. The governor sums the
+counts as it sums the summaries, and when that sum and the new reservation fit the budget, it admits
+with no walk. When they do not fit, it reads every summary and makes room as below.
 
 A VM that just booted or woke measures small for some seconds while it faults its pages in. So each
 admission also leaves a reservation: a share of the memory for a cold boot, and for a wake the
@@ -47,16 +47,16 @@ beside what is measured and reserved, it is admitted. When it does not:
    again. An imp is never a victim while it is held, has its lock taken, or has an open exec,
    proxied request, SSH connection or tunnel.
 3. It sleeps one victim at a time, because after a skip or a failure the rest of a pick is stale,
-   and sleeping it could cost imps their memory for an admission that then gives up.
+   and sleeping the rest anyway could sleep imps for an admission that then gives up.
 
 The governor never waits for a victim's lock: it holds admission, and a boot that waits on admission
 may hold another imp's lock. A victim locked by the time its turn comes is skipped, as is one whose
 sleep fails or whose snapshot the disk cannot take. When the imps it may sleep could not free enough
 even all together, the request fails with `RAM_BUDGET_EXCEEDED` at once, before it sleeps any of
-them, and the error names the awake imps it could not sleep. An imp whose own memory is larger than
-the whole budget is never admitted. A refusal that comes later, once a skip or a failure leaves the
-rest short, still costs the sleeps done before it, and each of those imps wakes on its next request.
-A caller of the wake proxy gets a 503 for a refusal; an API caller gets the error.
+them, and the error includes the awake imps it could not sleep. An imp whose own memory is larger
+than the whole budget is never admitted. A refusal that comes later, once a skip or a failure leaves
+the rest short, still costs the sleeps done before it, and each of those imps wakes on its next
+request. A caller of the wake proxy gets a 503 for a refusal; an API caller gets the error.
 
 A boot or wake on huge pages must also fit the free pool of huge pages, and the governor sleeps no
 imp to make pool room. On a host with a pool, a boot, wake or grow on ordinary pages must also fit
@@ -111,7 +111,7 @@ beside it. `impz info --json` prints it.
 A guest can grow past its reservation, so measured use can pass the budget between admissions. On a
 short tick, the governor sleeps least recently active imps while measured use is over the budget,
 regardless of the idle timeout. When the imps it may sleep cannot bring use under the budget, it
-sleeps all of them, to get as close as it can. This trades availability for the host: an imp that
+sleeps all of them, to get as close as it can. This puts the host before availability: an imp that
 served a request a moment ago can go to sleep. While use stays over, every boot and wake fails with
 `RAM_BUDGET_EXCEEDED`, so an imp the governor slept does not wake only to sleep again.
 
@@ -132,11 +132,11 @@ Firecracker has no KSM setting, and its seccomp filter traps the call that would
 starts each VM through a small launcher that marks the process's memory mergeable and execs the
 jailer in place. The mark belongs to the process's memory and survives each exec. That needs Linux
 6.10 or later, where the kernel scans an exec'd process, and impd refuses to start with KSM on an
-older kernel. After each boot, wake and adopt it checks the mark, and reports a VM that lost it.
+older kernel. After each boot, wake and adopt, impd checks the mark, and reports a VM that lost it.
 
 A merged page's share splits across the VMs that map it, so measured use falls by what KSM saves
 with no change to the governor. A write splits a merged page again at write speed, faster than an
-enforcement tick, so the governor keeps a headroom of what KSM saves free beside the budget. At the
-full headroom, a split of every merged page at once still fits, and KSM lowers the host's real RAM
-use without fitting more imps; a smaller headroom fits more imps and takes the risk. A sleep then
-records a VM's unshared size, not its shared one, for the next wake's reservation.
+enforcement tick, so the governor keeps free, beside the budget, a headroom the size of what KSM
+saves. At the full headroom, a split of every merged page at once still fits, and KSM lowers the
+host's real RAM use without fitting more imps; a smaller headroom fits more imps and takes the risk.
+A sleep then records a VM's unshared size, not its shared one, for the next wake's reservation.

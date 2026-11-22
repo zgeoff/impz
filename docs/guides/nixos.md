@@ -1,5 +1,9 @@
 # NixOS
 
+To run impz on a NixOS host, add the module to your flake, rebuild with `nixos-rebuild switch`, then
+run the commands in [Check it](#check-it). [Test it](#test-it) is for anyone who changes the module
+and runs its tests.
+
 impz's flake exports `nixosModules.imp`, which sets a NixOS host up for the `imp-host` container. It
 meets the [host contract](../architecture/host.md), as
 [`deploy/bootstrap.sh`](./install.md#bootstrap-a-server) does on Ubuntu and Debian. The module is
@@ -50,9 +54,9 @@ Use a kernel that the system's ZFS builds for. The module's checks use nixpkgs' 
 - **Kernel:** `vm.overcommit_memory = 1`, `vm.swappiness = 1`, and the modules `kvm`, `tun` and
   `loop`. With ZFS, also `zfs`, `boot.supportedFilesystems.zfs`, and the ARC cap (`zfs.arcMaxMiB`)
   in `boot.extraModprobeConfig`.
-- **Storage:** the module expects the pool and never creates it. It needs `networking.hostId`, and
-  with `zfs.importPool` (the default) it adds the pool to `boot.zfs.extraPools`, and imports it by
-  `/dev/disk/by-partuuid` (`boot.zfs.devNodes`, a default you can override): virtio disks have no
+- **Storage:** create the pool yourself; the module never creates it. It needs `networking.hostId`.
+  With `zfs.importPool` (the default), it adds the pool to `boot.zfs.extraPools` and imports it by
+  `/dev/disk/by-partuuid` (`boot.zfs.devNodes`, a default you can override). Virtio disks have no
   serial, so `/dev/disk/by-id` has no link to them and the import finds the pool `MISSING`.
   `imp-zfs-dataset.service` runs after `zfs-import.target` and creates `zfs.root` (default
   `tank/imp`) with `mountpoint=legacy` only when it is missing. With `storage = "xfs"`, declare
@@ -63,34 +67,36 @@ Use a kernel that the system's ZFS builds for. The module's checks use nixpkgs' 
   [`deploy/imp-host.args.json`](../../deploy/imp-host.args.json), the same file
   [`deploy/imp-host.service`](../../deploy/imp-host.service) comes from. Before each start it writes
   [the env file](#the-env-file) to `/run/imp-host/env` (0600). `imp-host-image.service` loads
-  `imageArchive`, or pulls `image` when the image is missing, before each start. With ZFS, it needs
-  `imp-zfs-dataset.service`.
+  `imageArchive`, or pulls `image` when the image is missing, before each start. With ZFS,
+  `imp-host.service` needs `imp-zfs-dataset.service`.
 - **No Docker socket:** imp-host gets none
   ([the Docker socket](../architecture/host.md#the-docker-socket)). That closes the Docker socket
-  path only: `SYS_ADMIN` still lets root out of the container. The module and the image must come
-  from the same release ([the image](#the-image)). The module runs the image without `--privileged`,
-  so an image from before that change ([#75](https://github.com/zgeoff/impz/issues/75)) fails at
-  start, in `setup-storage`.
+  path only: `SYS_ADMIN` still lets root out of the container. Use a module and an image from the
+  same release ([the image](#the-image)). The module runs the image without `--privileged`, so an
+  image from before that change ([#75](https://github.com/zgeoff/impz/issues/75)) fails at start, in
+  `setup-storage`.
 - **Public imps:** `publicPorts`, such as `[ "443:7443" "80:7480" ]`, publishes the public
   listeners, as `IMP_PUBLIC_PORTS` does for the systemd unit
   ([public imps](./https.md#public-imps)). Set `IMP_PUBLIC_IP` in `settings`, and open the ports in
   `networking.firewall`. The module refuses `IMP_PUBLIC_PORTS` in `settings`.
-- **The public egress policy:** `egressDeny` lists the addresses no `public` imp reaches beyond the
-  private ranges, as `IMP_EGRESS_DENY` ([public](../architecture/network/egress.md#public)). The
-  module writes this host's own global addresses into `IMP_HOST_ADDRESSES` at each start, so list
-  only what that misses, such as an address the host gains later. The module refuses
-  `IMP_EGRESS_DENY` in `settings`.
-- **Firewall:** `hostFirewall`, by default `none`. The env file says `IMP_HOST_FIREWALL=none`,
-  `networking.firewall` stays the host's firewall, and impz adds no host rules; it needs no inbound
-  port ([Firewall](../architecture/host.md#the-host-firewall)). With `own`, the module loads
+- **The public egress policy:** list in `egressDeny` the addresses, beyond the private ranges, that
+  no `public` imp reaches, as `IMP_EGRESS_DENY`
+  ([public](../architecture/network/egress.md#public)). The module writes this host's own global
+  addresses into `IMP_HOST_ADDRESSES` at each start, so list only what that misses, such as an
+  address the host gains later. The module refuses `IMP_EGRESS_DENY` in `settings`.
+- **Firewall:** `hostFirewall` is `none` by default. With `none`, the env file sets
+  `IMP_HOST_FIREWALL=none` and `networking.firewall` stays the host's firewall. impz adds no rules
+  for traffic into the host, and needs no inbound port beyond the `publicPorts` you open yourself
+  ([Firewall](../architecture/host.md#the-host-firewall)). With `own`, the module loads
   `bootstrap.sh`'s `imp_host` table for `services.openssh.ports`, and refuses the build unless
   `networking.firewall.enable = false`. Either way it refuses
   `networking.nftables.flushRuleset = true`, which would flush netavark's rules.
 - **Forwarding:** with `networking.firewall.filterForward = true` (nftables), the firewall drops new
-  forwarded traffic that no rule admits, and so imps' egress. The module adds
-  `iifname { "br-imphost" } accept` to `networking.firewall.extraForwardRules`, or `podman0` without
-  IPv6: imp-host's bridge alone, so other containers on `podman0` need rules of their own. It trusts
-  no interface: `trustedInterfaces` would also open every host service, such as the k3s API, to imp
+  forwarded traffic that no rule admits, and so imps' egress. The module adds one accept rule to
+  `networking.firewall.extraForwardRules`, for the bridge imp-host runs on. With IPv6 the rule is
+  `iifname { "br-imphost" } accept`, and other containers on `podman0` need rules of their own.
+  Without IPv6 the rule names `podman0`, so it admits every container on it. The module trusts no
+  interface: `trustedInterfaces` would also open every host service, such as the k3s API, to imp
   traffic. `forwardDeny` drops ranges that imps may not reach through the host
   ([IPv6 and forwarding](#ipv6)).
 
@@ -117,10 +123,11 @@ Use a kernel that the system's ZFS builds for. The module's checks use nixpkgs' 
 
 `ipv6.enable` runs `imp-host` on the Podman network `imp-host`, with the /64 `ipv6.subnet` and the
 bridge `br-imphost`, as `bootstrap.sh --ipv6 on` does ([IPv6](./install.md#ipv6)). By default
-`ipv6.subnet` is a unique local /64 from a hash of `networking.hostId`. The env file says
-`IMP_HOST_IPV6=on`. Before each start, the module creates the network when it is missing, and
-creates it again when it differs and nothing else is on it. Without IPv6, it removes a network that
-an earlier generation made. Turning IPv6 off cold-boots every imp that has an IPv6 prefix.
+`ipv6.subnet` is a unique local /64 from a hash of `networking.hostId`. The module sets
+`IMP_HOST_IPV6=on` in the env file. Before each start, the module creates the network when it is
+missing, and creates it again when it differs and nothing else is on it. Without IPv6, it removes a
+network that an earlier generation made. Turning IPv6 off cold-boots every imp that has an IPv6
+prefix.
 
 ```nix
 services.imp = {
@@ -155,11 +162,11 @@ policy as it was, so other services that forward IPv6, such as dual-stack k3s, n
 for it.
 
 `forwardDeny` takes IPv4 and IPv6 ranges that traffic from `br-imphost` and `podman0` may not reach
-through the host. They drop in the nftables table `imp-forward`, a forward chain that runs before
-`networking.firewall`'s, so ICMPv6, which that chain accepts first, drops too. Only new flows drop
-(`ct direction original`): the replies of a flow that started in a denied range, such as a k3s pod
-that reaches a public imp, pass. It needs `networking.nftables.enable`. Set it to a k3s cluster's
-pod and service ranges, for example, instead of hand-written `podman0` rules.
+through the host. Traffic to them drops in the nftables table `imp-forward`, whose forward chain
+runs before `networking.firewall`'s, so ICMPv6, which that chain accepts first, drops too. Only new
+flows drop (`ct direction original`): the replies of a flow that started in a denied range, such as
+a k3s pod that reaches a public imp, pass. `forwardDeny` needs `networking.nftables.enable`. Set it
+to a k3s cluster's pod and service ranges, for example, instead of hand-written `podman0` rules.
 
 ## Reinstall
 
@@ -169,9 +176,9 @@ A reinstall keeps the pool, and the imps and node state in it:
   the import refuse it.
 - Never let disko, or any disk layout tool, format the pool's disk. Leave that disk out of the
   layout, and let the module import the pool.
-- impd's database lives on the pool too: setup-storage mounts `<pool>/imp` on `/var/lib/imp` before
-  impd starts. A database that is lost or older than the pool leaves disks it does not name; impd
-  keeps and logs them ([storage cleanup](./operations.md#storage-cleanup)).
+- impd's database lives on the pool too: setup-storage mounts the `zfs.root` dataset on
+  `/var/lib/imp` before impd starts. A database that is lost or older than the pool leaves disks it
+  does not name; impd keeps and logs them ([storage cleanup](./operations.md#storage-cleanup)).
 
 ## The env file
 
@@ -181,33 +188,36 @@ reads the values, so neither the file nor Podman's container config puts a copy 
 system disk. The keys that the module passes with `podman run -e`, such as `IMP_ENV_FILE`, stay out
 of the file, so those values win as they would over `--env-file`.
 
-The file is written again at each start of `imp-host`, so edit the module's options, not the file:
+The module writes the file again at each start of `imp-host`, so edit the module's options, not the
+file:
 
 - `settings`: any [variable](./configuration.md) but the module's own keys (`IMP_HOST_IMAGE`,
-  `IMP_STORAGE_BACKEND`, `IMP_ZFS_ROOT`, `IMP_HOST_FIREWALL`, `IMP_HOST_IPV6`, `IMP_HOST_SUBNET6`),
-  `IMP_HOST_NETWORK`, `TAILSCALE_AUTHKEY` and `IMP_DNS_API_TOKEN_FILE`, which the module refuses
-  there. They are in the Nix store, so never put a secret here.
+  `IMP_STORAGE_BACKEND`, `IMP_ZFS_ROOT`, `IMP_HOST_FIREWALL`, `IMP_HOST_IPV6`, `IMP_HOST_SUBNET6`,
+  `IMP_EGRESS_DENY`), `IMP_PUBLIC_PORTS`, `IMP_HOST_NETWORK`, `TAILSCALE_AUTHKEY`,
+  `IMP_BACKUP_PASSWORD_FILE` and `IMP_DNS_API_TOKEN_FILE`, which the module refuses there.
+  `settings` lands in the Nix store, so never put a secret here.
 - `environmentFile`: a file outside the store, such as a sops or agenix secret, copied in at each
   start.
-- `IMP_RAM_BUDGET_MIB`: `ramBudgetMiB`, else measured at each start, as `bootstrap.sh` does, less
-  the ARC cap ([RAM](../architecture/host.md#what-the-host-gives)). When the formula gives less than
-  512 MiB, `imp-host` refuses to start and logs the RAM and the formula: set `ramBudgetMiB`. A start
-  that keeps failing stops after five tries in five minutes.
-- The ARC cap: `zfs.arcMaxMiB`, set through `boot.extraModprobeConfig` so it holds from boot. Do not
-  also set `zfs_arc_max` in your own `boot.extraModprobeConfig` or `boot.kernelParams`: two values
-  clash, and the budget counts only `arcMaxMiB`. Unset, each start keeps a cap that is already set,
-  or else sets bootstrap.sh's 10 % of RAM within 1 to 8 GiB.
+- `IMP_RAM_BUDGET_MIB` comes from `ramBudgetMiB`, or else the module measures it at each start, as
+  `bootstrap.sh` does, less the ARC cap ([RAM](../architecture/host.md#what-the-host-gives)). When
+  the formula gives less than 512 MiB, `imp-host` refuses to start and logs the RAM and the formula:
+  set `ramBudgetMiB`. A start that keeps failing stops after five tries in five minutes.
+- Set the ARC cap with `zfs.arcMaxMiB`, which the module puts in `boot.extraModprobeConfig` so it
+  holds from boot. Do not also set `zfs_arc_max` in your own `boot.extraModprobeConfig` or
+  `boot.kernelParams`: two values clash, and the budget counts only `arcMaxMiB`. With
+  `zfs.arcMaxMiB` unset, each start keeps a cap that is already set, or else sets bootstrap.sh's 10
+  % of RAM within 1 to 8 GiB.
 
 ## Backups
 
-`backupPasswordFile` names the restic repository password, outside the Nix store
+`backupPasswordFile` names a file outside the Nix store that holds the restic repository password
 ([backups](../architecture/storage/backups.md)). Keep it at
-`/var/lib/imp-host/secrets/backup-password`, owned by root, mode 0400. Like the Tailscale key, a
-copy goes to `/run/imp-host` before each start and is mounted read-only into the container at
-`/run/imp/backup-password`, and `IMP_BACKUP_PASSWORD_FILE` names it; the password never goes into
-the env file. A missing or empty file only warns, and the module blanks `IMP_BACKUP_REPOSITORY`, so
-backups stay off. Put `IMP_BACKUP_REPOSITORY` and the `AWS_*` keys in `environmentFile`, such as
-`/var/lib/imp-host/secrets/imp-host.env` (root, 0400).
+`/var/lib/imp-host/secrets/backup-password`, owned by root, mode 0400. As with the Tailscale key,
+the module copies it to `/run/imp-host` before each start and mounts the copy read-only into the
+container at `/run/imp/backup-password`, and `IMP_BACKUP_PASSWORD_FILE` points there. The password
+never goes into the env file. A missing or empty file only warns, and the module blanks
+`IMP_BACKUP_REPOSITORY`, so backups stay off. Put `IMP_BACKUP_REPOSITORY` and the `AWS_*` keys in
+`environmentFile`, such as `/var/lib/imp-host/secrets/imp-host.env` (root, 0400).
 
 ## The DNS API token
 
@@ -219,7 +229,8 @@ impd refuses to start with both.
 impd reads the token at each DNS call, so a new one must reach the running container. The module
 copies the file into the directory `/run/imp-host/dns` and mounts the directory read-only at
 `/run/imp/dns`, and `IMP_DNS_API_TOKEN_FILE` names `/run/imp/dns/token`. A mounted file would keep
-the old token after a copy; a mounted directory sees each new file, renamed in. The copy is made:
+the old token after a copy; a mounted directory sees each new file, renamed in. The module copies
+the token:
 
 - before each start of `imp-host`;
 - when the file changes (`imp-host-dns-token.path`, with `PathChanged`);
@@ -252,10 +263,11 @@ it to `/run/imp-host` and mounts the copy read-only into the container at
 `/run/imp/tailscale-authkey`, and `tailscale-up.sh` in the container decides when to use it
 ([how it works](./tailscale.md#how-it-works)):
 
-- With node state in the pool, `tailscaled` comes back from it, and the key is not used.
-- With no state, or a saved node that needs a login, `tailscale` joins with the key. An ephemeral
-  node that stays offline long enough is deleted by Tailscale, and a reinstall can take that long,
-  so keep a valid key in the file if the host may be down for a while.
+- With good node state in the pool, `tailscaled` comes back from it, and the key is not used.
+- With no state, or a saved node that needs a login (`NeedsLogin`, `NeedsMachineAuth` or `Stopped`),
+  `tailscale` joins with the key. An ephemeral node that stays offline long enough is deleted by
+  Tailscale, and a reinstall can take that long, so keep a valid key in the file if the host may be
+  down for a while.
 - A missing or empty key file only warns, and the node comes back from its saved state. The module
   always mounts its own copy, so the mount always has a source; Podman refuses to start a container
   whose mount source is missing.
@@ -288,8 +300,8 @@ podman exec imp-host impz rm check
   `bootstrap.sh`. One has a ZFS pool on a second disk and a stand-in image that runs the real
   `tailscale-up.sh` against a fake `tailscale`. It checks the env file, that its secrets reach the
   container's processes but never the system disk or Podman's config, the kernel settings, that the
-  host has no Docker and no imp firewall rules, and the three ways the node comes up: a first join
-  with the key, a restart from good state with no key, and a join again when the saved node needs a
+  host has no Docker and no `imp_host` firewall table, and how the node comes up: a first join with
+  the key, a restart from good state with no key, and a join again when the saved node needs a
   login. The other has `hostFirewall = "own"`: SSH connects through the imp table, and another port
   does not. It needs KVM, with nesting, and boots no imp. Its script waits on conditions, never a
   fixed delay, and each scenario that changes the running host restores it and checks the restore.

@@ -22,15 +22,16 @@ metadata:
 - Add each CI job to one of imp's own workflows in
   [`.github/workflows/`](../../../.github/workflows/): most often
   [`ci.yml`](../../../.github/workflows/ci.yml), or [`nix.yml`](../../../.github/workflows/nix.yml)
-  when the job runs `nix`. The Jobs section of [ci-design](../ci-design/SKILL.md) has the repo call
-  `bun-checks.yml` and add CI work as a package script, but that workflow has no input for what
-  imp's jobs need: KVM for the microVM suites, Docker, Go, root for the host networking lane, and a
-  ZFS pool.
+  when the job runs `nix`. In the Jobs section of [ci-design](../ci-design/SKILL.md), a repo calls
+  `bun-checks.yml` and adds CI work as a package script. imp doesn't, because that workflow has no
+  input for what imp's jobs need: KVM for the microVM suites, Docker, Go, root for the host
+  networking lane, and a ZFS pool.
 
 ## The required checks
 
 - Match each ruleset entry to the check name that GitHub shows: the job's `name:`, or its id when it
-  has none. The workflows call these jobs the gates, and no gate sets a `name:`.
+  has none. These jobs are the gates in the workflows. The gates in `ci.yml` set no `name:`; the
+  gate in `verify.yml` shows as `verify / gate`.
 - Rename a gate and its ruleset entry in the same pull request. Otherwise GitHub waits for a check
   that never reports.
 - Add new test work to a job that a gate already waits on, when one runs the same kind of work: a

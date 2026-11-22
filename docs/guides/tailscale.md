@@ -1,13 +1,18 @@
 # Tailscale
 
-The host container joins the tailnet as one node, tagged `tag:imp`. Every imp is reachable through
-that node on its own port. [Networking](../architecture/network/ingress.md#the-wake-proxy) covers
-the URLs, and [configuration](./configuration.md#host-container) lists the variables.
+The host container joins the tailnet as one node, tagged `tag:imp` (set other tags with
+`IMP_TAILSCALE_TAGS`; this guide assumes the default). Every imp is reachable through that node on
+its own port. For the URLs, see [Networking](../architecture/network/ingress.md#the-wake-proxy); for
+the variables, see [configuration](./configuration.md#host-container).
+
+To put the host on a tailnet, give the container a key, add the [ACL](#how-it-works), then
+[verify reachability](#verify-reachability). The ACL is the boundary: it decides which members reach
+the host and its imps.
 
 ## How it works
 
 `host/scripts/tailscale-up.sh` runs inside the host container. The key comes from
-`TAILSCALE_AUTHKEY`, or from the file `IMP_TAILSCALE_AUTHKEY_FILE` names (the
+`TAILSCALE_AUTHKEY`, or from the file at `IMP_TAILSCALE_AUTHKEY_FILE` (the
 [NixOS module](./nixos.md#the-tailscale-key) mounts one). With neither a key nor saved node state it
 does nothing. Otherwise it:
 
@@ -15,63 +20,71 @@ does nothing. Otherwise it:
    points at `100.100.100.100`. See [DNS](#dns).
 2. Starts `tailscaled` in kernel TUN mode (`tailscale0`) unless one already runs. The container has
    `NET_ADMIN`, `/dev/net/tun` and its own netns, so the TUN device and routes never touch the host.
-3. With saved state, waits up to 15 s for the saved node to be `Running`. If it is, it skips the
-   login and never uses a key, which would make a second node; `deploy/bootstrap.sh` blanks the key
-   once the node has joined. If the saved node needs a login instead (`NeedsLogin`: it logged out,
-   or Tailscale deleted it after a long time offline), it goes on to step 4 with the key, and fails
-   without one. A saved node still `Starting` after 15 s (no network yet) counts as good: the script
-   returns, and waits in the background, for up to 30 minutes, for `Running`, or for a login it then
-   makes with the key.
+3. With saved state, waits up to 15 s for the saved node to be `Running`. Then:
+   - If the node is `Running` under the wanted hostname and control server, with the tags in
+     `IMP_TAILSCALE_TAGS` when that is set, it skips the login and never uses a key, because a key
+     would make a second node. `deploy/bootstrap.sh` blanks the key once the node has joined.
+   - If the node is `Running` under another hostname or control server, it logs in again with the
+     key at step 4. Without a key it keeps running as it is.
+   - If `IMP_TAILSCALE_TAGS` is set and the running node has other tags, it logs in again with the
+     key at step 4. Without a key the node goes down.
+   - If the node needs a login (`NeedsLogin`: it logged out, or Tailscale deleted it after a long
+     time offline), it goes on to step 4 with the key, and fails without one.
+   - If the node is still `Starting` after 15 s (no network yet), the script counts it as good and
+     returns. In the background it waits up to 30 minutes for `Running`, or for a login, which it
+     then makes with the key.
 4. Runs
-   `tailscale up --auth-key=file:... --hostname=${IMP_TAILSCALE_HOSTNAME:-imp} --advertise-tags=tag:imp --accept-dns=false --reset --timeout=60s`.
-   The key goes through a 0600 temp file, or the key file itself, so it never shows in argv. A node
-   that runs from saved state under another hostname, or on another control server, logs in again
-   only when there is a key. With `IMP_TAILSCALE_LOGIN_SERVER` set, it passes `--login-server` in
-   place of `--advertise-tags` ([Headscale](#headscale)).
+   `tailscale up --auth-key=file:... --hostname=${IMP_TAILSCALE_HOSTNAME:-imp} --advertise-tags=${IMP_TAILSCALE_TAGS:-tag:imp} --accept-dns=false --reset --timeout=60s`.
+   The key goes through a 0600 temp file, or the key file itself, so it never shows in argv. With
+   `IMP_TAILSCALE_LOGIN_SERVER` set, it passes `--login-server` in place of `--advertise-tags`
+   ([Headscale](#headscale)).
 5. Waits for `Running` and prints the tailnet IP and MagicDNS name.
 
 `host/scripts/tailscale-down.sh` runs `tailscale logout` and stops `tailscaled`. Logout deletes an
 ephemeral node at once. A plain container stop does **not** log out.
 
-ACL: `autogroup:member -> tag:imp:*`. Members reach the host on any port. The host (and so any imp
-traffic that leaves through it) cannot open connections to members. Replies to member connections
-pass. With more than one host, add `tag:imp -> tag:imp:7070`, so hosts can reach each other's impd
-API for [moves](./hosts.md#the-acl). Guests never use it: their egress refuses `100.64.0.0/10`.
+Add the ACL `autogroup:member -> tag:imp:*`. Members reach the host on any port. The host (and so
+any imp traffic that leaves through it) cannot open connections to members. Replies to member
+connections pass. With more than one host, add `tag:imp -> tag:imp:7070`, so hosts can reach each
+other's impd API for [moves](./hosts.md#the-acl). Guests never use that rule: their egress refuses
+`100.64.0.0/10`.
 
 ## Headscale
 
-`IMP_TAILSCALE_LOGIN_SERVER` points the node at a [Headscale](https://headscale.net) control server
-in place of Tailscale's. Headscale refuses a pre-auth key join that advertises any tag, and gives
-the node the tags of its key instead, so `tailscale-up.sh` advertises none. Make the key with its
-tags:
+Set `IMP_TAILSCALE_LOGIN_SERVER` to point the node at a [Headscale](https://headscale.net) control
+server in place of Tailscale's. Headscale refuses a pre-auth key join that advertises any tag, and
+gives the node the tags of its key instead, so `tailscale-up.sh` advertises none. Make the key with
+its tags:
 
 ```sh
 headscale preauthkeys create --tags tag:imp-e2e
 ```
 
-The tag check works as with Tailscale: with `IMP_TAILSCALE_TAGS` set, a node whose tags differ joins
-again with the key, or goes down. A node on another control server, such as Tailscale's, joins the
-one `IMP_TAILSCALE_LOGIN_SERVER` names with the key and `--force-reauth`, which `tailscale` needs to
-change servers. Without a key it stays where it is, and `tailscale-up.sh` says so on stderr.
-`bun run test:headscale` joins a Headscale tailnet in Docker this way.
+The tag check of step 3 works the same way: set `IMP_TAILSCALE_TAGS` to the tags the key must give.
+A tag other than `tag:imp`, such as the e2e harness's `tag:imp-e2e`, needs its own ACL lines. A node
+on another control server, such as Tailscale's, joins the server in `IMP_TAILSCALE_LOGIN_SERVER`
+with the key and `--force-reauth`, which `tailscale` needs to change servers. Without a key it stays
+where it is, and `tailscale-up.sh` says so on stderr. `bun run test:headscale` joins a Headscale
+tailnet in Docker this way.
 
 ## State and ephemeral keys
 
-State lives in `/var/lib/imp/tailscale` (`IMP_TAILSCALE_STATE_DIR`). `mem` keeps the node in memory
-and its TLS certificates in `/var/lib/imp/tailscale`, so an HTTPS name still works.
+State lives in `/var/lib/imp/tailscale` (`IMP_TAILSCALE_STATE_DIR`). `IMP_TAILSCALE_STATE_DIR=mem`
+keeps the node in memory and its TLS certificates in `/var/lib/imp/tailscale`, so an HTTPS name
+still works; the e2e harness uses it.
 
-impz keeps the node state even with an ephemeral key, because the name matters more than the node
-lifetime:
+By default impz keeps the node state on disk even with an ephemeral key, because the name matters
+more than the node lifetime:
 
-- With persisted state, a restart reuses the same node: same IP, same name. Checked: kill
-  `tailscaled`, run `tailscale-up.sh` again, the IP does not change.
-- With `--state=mem:`, every start registers a new node. The old node stays until Tailscale removes
-  it, so the new one becomes `imp-1`, `imp-2` and so on. The URLs change.
+- With persisted state, a restart reuses the same node: same IP, same name. This was checked by
+  killing `tailscaled` and running `tailscale-up.sh` again: the IP stayed the same.
+- With `mem`, every start registers a new node. The old node stays until Tailscale removes it, so
+  the new one becomes `imp-1`, `imp-2` and so on. The URLs change.
 
-The limit: an ephemeral node that stays offline is deleted by Tailscale. The time before that is
-Tailscale's choice, not ours, and a reinstall can take that long. After that, the saved state is
-dead: `tailscale-up.sh` sees `NeedsLogin` and joins again with the key, which registers a fresh node
-with a new IP (and the old name, if it is free). Without a key the node stays off the tailnet.
+Tailscale deletes an ephemeral node that stays offline. Tailscale picks how long it waits, and a
+reinstall can take that long. After that, the saved state no longer works: `tailscale-up.sh` sees
+`NeedsLogin` and joins again with the key, which registers a fresh node with a new IP (and the old
+name, if it is free). Without a key the node stays off the tailnet.
 
 For a long-lived host, use a non-ephemeral, tagged key, or an OAuth client
 (`--auth-key=tskey-client-...?ephemeral=false`). Tagged nodes have no key expiry. Keep the ephemeral
@@ -89,8 +102,8 @@ share.
 ## Tailnet identity
 
 impd can give tailnet members access to its API without a token: `IMP_TAILNET_IDENTITIES` maps
-logins and tags to scopes, and impd checks each connection with `tailscale whois`.
-[Tokens and identities](./tokens.md#tailnet-identity) covers the rules and how impd keeps them safe.
+logins and tags to scopes, and impd checks each connection with `tailscale whois`. For the rules and
+how impd keeps them safe, see [Tokens and identities](./tokens.md#tailnet-identity).
 
 ## URL scheme
 
@@ -122,10 +135,11 @@ tailscale serve --bg --https=21000 http://127.0.0.1:20000
 - `--tcp=<port> tcp://127.0.0.1:<port>` forwards raw TCP; `--tls-terminated-tcp=<port>` adds TLS in
   front of a raw TCP backend. Both bypass HTTP, so no Host-header routing.
 
-impd does not use `tailscale serve`. With a domain of your own, impd terminates TLS itself, with a
-wildcard certificate, and every imp gets a name instead of a port ([HTTPS](./https.md)). A serve
-config on 443 or 80 takes that port before impd sees the traffic, so impd warns about one at start.
-Serve config is part of the node state, so it survives restarts with persisted state.
+impd does not use `tailscale serve` for per-port URLs; only [per-imp names](#per-imp-names) use it.
+With a domain of your own, impd terminates TLS itself, with a wildcard certificate, and every imp
+gets a name instead of a port ([HTTPS](./https.md)). A serve config on 443 or 80 takes that port
+before impd sees the traffic, so impd warns about one at start. Serve config is part of the node
+state, so it survives restarts with persisted state.
 
 ## DNS
 
@@ -141,7 +155,7 @@ that case. `scripts/dev/dev.sh` also starts the host container with `--dns 1.1.1
 With `IMP_TAILNET_NAMES=1`, each imp also gets a name of its own on the tailnet,
 `https://<name>.<tailnet>.ts.net` and `http://` the same, with no port. impd makes each name a
 [Tailscale Service](https://tailscale.com/kb/1552/tailscale-services): a virtual IP and a MagicDNS
-name that this host serves. It is off by default.
+name that this host serves. Per-imp names are off by default.
 
 **CAUTION:** The tailnet-names suite runs per-imp names on a test tailnet
 ([development](../runbooks/development.md#end-to-end-tests)), but the unit tests use fake API
@@ -193,10 +207,12 @@ Keep it in a file only root can read, and give it no other scope.
    ```
 
    impd reads it each time it needs a token, so the secret is never in its env, in `impz info` or in
-   a log line. A file that group or others can read is refused. `IMP_TAILNET_OAUTH_FILE` moves it.
+   a log line. impd refuses a file that group or others can read. To keep the file elsewhere, set
+   `IMP_TAILNET_OAUTH_FILE`.
 
-2. Set `IMP_TAILNET_NAMES=1` in the host's env file and restart the host container.
-   `IMP_TAILNET_NAME_PREFIX` puts a prefix on every name, for example `imp-` for `imp-box`.
+2. Once the fakes in the caution under [Per-imp names](#per-imp-names) are replaced, set
+   `IMP_TAILNET_NAMES=1` in the host's env file and restart the host container. Set
+   `IMP_TAILNET_NAME_PREFIX` to put a prefix on every name, for example `imp-` for `imp-box`.
 
 3. `impz url <name>` prints the name once it works, after the https URL of a domain and before the
    others. `impz info` counts the live names and lists each one that failed, with the reason.
@@ -212,8 +228,8 @@ Keep it in a file only root can read, and give it no other scope.
   2. Writes the service, `svc:<prefix><imp>`, with ports `tcp:80` and `tcp:443`.
   3. Serves it with `tailscale serve --service`, HTTP on 80 and HTTPS on 443, both to the imp's own
      port on loopback. That port wakes a sleeping imp, as a tailnet request to it does.
-- For a service of this host's that no imp has any more, it takes the imp's lock, checks that no imp
-  has the name, then runs `tailscale serve clear` and deletes the service. There is no
+- For a service of this host's that no imp has any more, impd takes the imp's lock, checks that no
+  imp has the name, then runs `tailscale serve clear` and deletes the service. There is no
   `tailscale serve drain` first: the imp is gone, so no connection through it is left to finish.
 - Serve config for a service that is gone from the tailnet is cleared.
 - A failure (the API, a name a device holds, a missing policy) fails that name only. It never fails
@@ -258,8 +274,9 @@ Or delete those services in the admin console; the next pass makes them again wi
 - No wildcard MagicDNS names, so no `<name>.imp.<tailnet>.ts.net`. Per-imp URLs on the tailnet are
   per-port, unless you give impd a domain of your own ([HTTPS](./https.md)) or turn on
   [per-imp names](#per-imp-names).
-- One `tailscale serve` cert, one name.
-- The host is one node: one IP, one name for all imps.
+- A plain `tailscale serve` port has one cert for one name, the node's FQDN.
+- The host is one node: one IP and one name for all imps, besides the virtual IPs and names that
+  per-imp names add.
 
 ## Verify reachability
 

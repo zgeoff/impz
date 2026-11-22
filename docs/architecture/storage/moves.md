@@ -35,14 +35,14 @@ The offer, the commit and the abort are the procedures of a typed oRPC contract 
 share, and each goes as a plain JSON POST to a fixed path. The stream goes beside the contract, as
 plain POSTs of raw frames behind the same ticket check, because oRPC holds a file input whole in
 memory. Those paths and bodies are the ones an impd of an earlier release sends and reads, so hosts
-on different releases move imps both ways. Each error body carries its text under `error` as well,
-which is all an earlier source reads, and the source reads an earlier target's bare `error` bodies
-and its 409 for the abort of a committed move as the same answers.
+on different releases move imps both ways. Each error body also carries its text under `error`, the
+only field an earlier source reads. The source reads an earlier target's bare `error` bodies, and
+its 409 for the abort of a committed move, as the same answers.
 
-The offer tells the source whether the target needs the image and what it can keep: an elastic imp's
-max memory, the imp's leases, and the `public` egress policy. The source refuses to send an imp that
-the target would land with less, before the stream, and starts again an imp its prepare stopped. A
-warm move of an imp on a private network is refused, since its peers stay behind.
+The target answers the offer with whether it needs the image and what it can keep: an elastic imp's
+max memory, the imp's leases, and the `public` egress policy. Before the stream starts, the source
+refuses to send an imp that would land on the target with less, and starts again an imp its prepare
+stopped. A warm move of an imp on a private network is refused, since its peers stay behind.
 
 ## The stream
 
@@ -78,7 +78,7 @@ neither may run then.
 | gone      | none                 | The target.                                   |
 
 A marked imp's lock refuses every call with `MOVING`, except the move's own steps, so no start,
-wake, stop, fork, checkpoint or restore runs, and its egress policy and grants refuse changes, since
+wake, stop, fork, checkpoint or restore runs, and its egress policy and grants can't change, since
 the header carries the ones the send read. The marked imp keeps its row, so the storage sweep keeps
 every file the send reads.
 
@@ -97,8 +97,11 @@ for a commit whose window ran out, and `impz move --resume` finishes a move with
 
 ## Recovery
 
-A crash on either side leaves marks that say where the move stood. The source also keeps the step of
-each send in its database, and one table of the steps refuses any change it does not list.
+A crash on either side leaves marks that show where the move stood. The source also keeps the step
+of each send in its database. A prepare writes the row at `prepared`. The source allows only two
+changes between steps, `prepared` to `streaming` and `streaming` to `sent`, which one table holds,
+and refuses any other. A send that ends removes its row from whatever step it reached: a commit from
+`sent`, and an abort or a refusal from any step.
 
 ```mermaid
 stateDiagram-v2
@@ -106,13 +109,17 @@ stateDiagram-v2
   prepared --> streaming: send
   streaming --> sent: receipt checked
   sent --> [*]: commit
+  prepared --> [*]: abort or refusal
+  streaming --> [*]: abort or refusal
+  sent --> [*]: abort
 ```
 
 The send's row also records whether its prepare stopped a running imp. At start the source acts on
 each step in the background:
 
 - **prepared:** the source keeps the mark, so the send that follows the restart goes as it would
-  have, and an imp the prepare stopped starts again when the target refuses the offer.
+  have, and an imp the prepare stopped starts again when the offer ends the send, as
+  [the steps](#the-steps) say.
 - **streaming:** the parts sent so far cannot resume, so the source aborts the send at the target
   and takes the mark off once the target confirms.
 - **sent:** the source retries the commit.
@@ -123,17 +130,17 @@ receipt stays until the source commits or aborts it.
 
 ## Warm moves
 
-A warm move puts the imp into the same slot on the target, because the snapshot holds the slot's
-tap, addresses and MAC, and each tap's MAC comes from its slot, so the guest's neighbour entry for
-its gateway holds ([networking](../network/networking.md#addressing)). The ticket keeps the slot for
-the imp while its stream runs. The snapshot's facts, the CPU, the host kernel and the Firecracker
-version, are checked against the target four times: at the prepare, at the receive, in the header,
-and last by the wake's own check, so a snapshot that got past the others still boots cold and never
-faults ([snapshot identity](../lifecycle/sleep-and-wake.md#snapshot-identity)). The snapshot's
-record goes last, and the commit sets the imp `sleeping` only once it reads whole. The imp's first
-wake on the target installs the target's broker CA in the guest before the wake returns, because
-until then the guest trusts the source's. When the install fails, the imp still wakes, and each
-later wake tries the install again until one succeeds.
+A warm move puts the imp into the same slot on the target. The snapshot holds the slot's tap,
+addresses and MAC, and each tap's MAC comes from its slot, so the guest's neighbour entry for its
+gateway holds ([networking](../network/networking.md#addressing)). The ticket keeps the slot for the
+imp while its stream runs. The CPU, host kernel and Firecracker version in the snapshot are checked
+against the target four times: at the prepare, at the receive, in the header, and last by the wake's
+own check, so a snapshot that got past the others still boots cold and never faults
+([snapshot identity](../lifecycle/sleep-and-wake.md#snapshot-identity)). The snapshot's record goes
+last, and the commit sets the imp `sleeping` only once the record reads whole. The imp's first wake
+on the target installs the target's broker CA in the guest before the wake returns, because until
+then the guest trusts the source's. When the install fails, the imp still wakes, and each later wake
+tries the install again until one succeeds.
 
 A warm move trusts the source with the target host, not only with the imp. The VM state is
 Firecracker's own format, which the target does not parse, and the paths in it are what the target's
@@ -143,12 +150,12 @@ it the load has impd's rights. So warm moves run only between hosts that trust e
 ## ZFS
 
 Between two ZFS hosts, the disk and checkpoints go as `zfs send` streams instead of files. An imp's
-snapshots do not sit in one line, because a restore retires the old disk and clones a checkpoint in
-its place, so they spread over datasets linked by origins, which a recursive send cannot follow. The
-source sends them in the order ZFS made them, each incremental from an earlier one on its dataset,
-from its dataset's origin when that is in the set, or else in full. The header names each stream's
-base by number, never a dataset name, and the target names each snapshot itself. A forked disk's
-first stream is full, so no other imp's data goes along.
+snapshots do not sit in one line. A restore retires the old disk and clones a checkpoint in its
+place, so the snapshots spread over datasets linked by origins, which a recursive send cannot
+follow. The source sends them in the order ZFS made them, each incremental from an earlier one on
+its dataset, from its dataset's origin when that is in the set, or else in full. In the header, each
+stream's base is a number, never a dataset name, and the target names each snapshot itself. A forked
+disk's first stream is full, so no other imp's data goes along.
 
 `zfs recv` commits when it reads a stream's end, not when its input closes, so the target holds back
 each stream's last frame until its hash matches, and a stream that fails its hash never reaches the

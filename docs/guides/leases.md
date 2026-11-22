@@ -1,8 +1,11 @@
 # Leases and holds
 
-A lease keeps an imp awake for as long as a client needs it. The client renews the lease and
-releases it, and it never clears a lease that another client holds. impd tells the client when the
-RAM budget turns a boot or a wake away, and which awake imps hold that RAM.
+A lease keeps an imp awake for as long as a client needs it. To write such a client, check
+`features.leases`, take a lease with `leases.acquire`, renew it before its `until`, and release it
+when done. The `leases.*` calls touch only the caller's own leases. Other calls can end other
+owners' leases, such as a forced sleep, a destroy or `impz hold 0`; see [Holds](#holds) and
+[Sleep and stop](#sleep-and-stop). impd tells the client when the RAM budget turns a boot or a wake
+away, and which awake imps hold that RAM.
 
 `system.info` gives `features.leases: true` on an impd with leases. An impd from before them has no
 `features`, and a `leases.*` call to it fails with not-found.
@@ -32,8 +35,8 @@ pair (principal, label) is the lease. The API shows its `owner` as `{ principal,
 
 A caller with host-wide manage (scope `manage`, no imp patterns) sees every owner. Any other caller
 sees its own leases in full and only a count of the others. `imps.get`, `imps.list` and every call
-that answers with an imp show `leases: { leases, otherCount }` that way. An event shows the count
-only: `{ leases: [], otherCount }`.
+that returns an imp show `leases: { leases, otherCount }` the same way. An event carries only the
+count: `{ leases: [], otherCount }`.
 
 ## Calls
 
@@ -48,11 +51,12 @@ Each call needs `exec` on the imp, as `impz hold` does. `ttlSeconds` is 10–360
 
 - An acquire or a renew never shortens a lease: the end becomes the later of the old end and now +
   `ttlSeconds`.
-- A refused boot fails the acquire with `RAM_BUDGET_EXCEEDED`, and no lease is written.
-- A lease ends at its `until`. impd sends no event for that; a renew after it gets `LEASE_NOT_HELD`.
+- When impd refuses the boot, the acquire fails with `RAM_BUDGET_EXCEEDED` and writes no lease.
+- A lease that no call ends runs out at its `until`. impd sends no event for that; a renew after it
+  gets `LEASE_NOT_HELD`. Take a new lease with `leases.acquire`.
 - `acquire` and `release` emit `ImpChanged` with reason `held`. `renew` emits nothing.
 - `leases.acquire` and `leases.renew` refuse the label `hold`, which `impz hold` writes and which
-  never blocks a sleep.
+  never blocks a user's sleep or stop.
 
 ## Holds
 
@@ -70,7 +74,7 @@ governor never sleep an imp with a live lease or hold
 ## Sleep and stop
 
 Only a lease taken through `leases.*` blocks a user's sleep or stop. A hold and a legacy hold never
-do, and they outlast it.
+do, and they survive the sleep or stop.
 
 - `imps.sleep` and `imps.stop` that would change the state of an imp with a lease from `leases.*`
   fail with `LEASED`, data `{ leases, otherCount }`, shown as [above](#owners). A sleep of a
@@ -92,9 +96,9 @@ do, and they outlast it.
 `RAM_BUDGET_EXCEEDED` keeps `budgetMib`, `usedMib` and `requestedMib`, and adds:
 
 - `neededMib`: what the request lacks past the budget;
-- `protected`: `{ name, ramMib, leased, busy }[]`, the awake imps the governor could not sleep that
-  the caller may read. `leased` is any live lease or hold; `busy` is an imp in use, under a
-  lifecycle operation, or whose sleep failed;
+- `protected`: `{ name, ramMib, leased, busy }[]`, the awake imps the governor could not sleep,
+  among those the caller may read. `leased` is any live lease or hold; `busy` is an imp in use,
+  under a lifecycle operation, or whose sleep failed;
 - `protectedHidden`: how many others there were.
 
 The same filter applies over `/exec`. A `GovernorDecision` `refused` event adds `neededMib` and
@@ -110,7 +114,12 @@ The same filter applies over `/exec`. A `GovernorDecision` `refused` event adds 
 
 ## Limits
 
-- A lease with no end (a null `until`) counts as held for good. No call writes one.
-- Leases end by time only; impd sends no event when one runs out.
+When you change leases, keep a `leases.*` call from touching another principal's lease, and keep an
+acquire or a renew from shortening one. Each client counts on its lease lasting to its `until`.
+
+- A lease with no end (a null `until`) counts as held for good and never runs out. No call writes
+  one.
+- No lease ends on its own except by running out, and impd sends no event when one runs out. The
+  other ways a lease ends are the calls above.
 - The store is `imp_leases` in impd's database: one row per (imp, principal, label), deleted with
   the imp.

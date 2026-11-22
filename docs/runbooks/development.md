@@ -1,7 +1,7 @@
 # Development
 
-How to check a change before you push it, and what CI and the branch rules do with it. The
-[install guide](../guides/install.md) sets up the dev instance.
+How to check a change before you push it, and what CI and the branch rules do with it. Set up the
+dev instance with the [install guide](../guides/install.md).
 
 ## Checks
 
@@ -30,14 +30,15 @@ scripts/test-go.sh                # the agent's Go tests with -race; prints the 
 scripts/test-e2e.sh --clean       # end to end, from a clean state
 ```
 
-`bun run check` runs the whole-tree gates of CI's `checks` job: dead code, format, the type-aware
-lint, the docs checks, types and every test. It needs more memory than a small host has, so run it
-on a large one, or leave it to CI. CI splits `bun run test` into two shards on two runners, with two
-workers each, and runs each shard in a cgroup capped at 1792 MiB with no swap, through `diet`, so a
-shard fails there before it outgrows a 2 GiB imp. `bun run lint:shell` needs shellcheck 0.11.0 and
-shfmt 3.14.1 on `PATH`, the versions CI pins; the shellcheck job in `.github/workflows/ci.yml` pins
-actionlint, zizmor and hadolint too. When a change touches the lifecycle, the agent or the host, run
-the end-to-end harness against a real instance.
+`bun run check` runs the whole-tree gates that CI's `checks-unit` and `checks-lanes` jobs run: dead
+code, format, the type-aware lint (`bun run lint:full`), the docs checks, types and every test. Both
+need more memory than a small host has, so never run `bun run check` or `bun run lint:full` locally:
+leave both to CI. CI splits `bun run test` into two shards on two runners, with two workers each,
+and runs each shard in a cgroup capped at 1792 MiB with no swap, through `diet`, so a shard fails
+there before it outgrows a 2 GiB imp. `bun run lint:shell` needs shellcheck 0.11.0 and shfmt 3.14.1
+on `PATH`, the versions CI pins; the shellcheck job in `.github/workflows/ci.yml` pins actionlint,
+zizmor and hadolint too. When a change touches the lifecycle, the agent or the host, run the
+end-to-end harness against a real instance.
 
 `bun run deadcode` runs knip twice: over the whole tree, then in production mode, which leaves out
 every test file. The production run fails on an export that only a test imports. Un-export it when
@@ -49,8 +50,9 @@ because the shared lint config bans JSDoc blocks and knip reads a tag from any b
 `scripts/test-e2e.sh` brings up the dev instance (`scripts/dev/dev.sh`), then runs each journey file
 of each suite as its own `bun test` process, and resets the suite's leftovers after each one. A
 journey file is one `<kind>-<journey>.test.ts` file in `packages/daemon/e2e/`, such as
-`journey-sleep-memory.test.ts`. Every case drives impd through the `impz` CLI, the way a user would;
-the dashboard suite drives it through a browser. The suites run in this order:
+`journey-sleep-memory.test.ts`. Each case drives impd the way a user would: through the `impz` CLI,
+through `ssh`, `scp` or `sftp` in the SSH suites, or through a browser in the dashboard suite. The
+suites run in this order:
 
 | Suite            | What it proves                                                                                                                                                                                                                                |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -260,12 +262,12 @@ hand, with `docker image rm <tag>`.
 
 The daemon's tests need no VM. `startTestImpd` in `packages/testing/src/stand-in/` starts impd
 through the same startup as production, over an in-memory database and a stub VMM
-(`packages/testing/src/stand-in/vm/build-stub-vmm.ts`). A test scripts what the next boot, wake,
-sleep, stop or agent check does (succeed, fail, die or hang), holds a step until it releases it, and
-restarts impd over the same database and VMs. Another package's tests import the harness from
+(`packages/testing/src/stand-in/vm/build-stub-vmm.ts`). In a test, script what the next boot, wake,
+sleep, stop or agent check does (succeed, fail, die or hang), hold a step until you release it, and
+restart impd over the same database and VMs. In another package's tests, import the harness from
 `@impz/testing/stand-in/start-test-impd`. To check that impd left no dead VM or lost snapshot on its
-records, a test calls `readBrokenInvariants`. It reads the records raw, because a read through the
-service repairs what it finds.
+records, call `readBrokenInvariants`. It reads the records raw, because a read through the service
+repairs what it finds.
 
 After you add a migration, run `bun run render:db-schema`: kysely-codegen writes the daemon's typed
 schema from a freshly migrated database, and `bun test` fails while the committed file differs.
@@ -309,13 +311,13 @@ Lefthook installs the hooks with `bun install`.
   - the shared baseline from `@zgeoff/chex`, which `lefthook.yml` extends from `node_modules`. It
     checks the format and the types of the whole tree, runs the docs checks that `check:docs` names,
     and lints and tests only the files the branch changes since its merge base with `origin/main`.
-    rig leaves the dashboard's tests out, so CI runs them;
+    rig leaves the dashboard's tests out, and CI runs them;
   - on a branch that changes the agent's, ksm-exec's, oci-fetch's or uffd-handler's Go, `gofmt` on
     the changed files and `go vet -p 1`, which keeps vet's memory within what a 2 GB imp can spare;
   - on a branch that changes `build-formula.sh`, `lint:formula`, which needs ruby on `PATH`.
 
-  CI's `checks` job runs type-aware lint, deadcode and every test, and the Go lint, vulnerability
-  and dead-code gates run in CI only.
+  The hook leaves type-aware lint, deadcode and the full test run to CI's `checks-unit` and
+  `checks-lanes` jobs, and the Go lint, vulnerability and dead-code gates to CI's `go` job.
 
 ## CI
 
@@ -324,13 +326,13 @@ Lefthook installs the hooks with `bun install`.
 | Job          | Required | What it runs                                                                                                                                                                                                                                                              |
 | ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `gitleaks`   | yes      | A secret scan over the history.                                                                                                                                                                                                                                           |
-| `checks`     | yes      | Passes only when the `checks-unit` and `checks-lanes` jobs passed (below the table).                                                                                                                                                                                      |
+| `checks`     | yes      | Passes only when the `checks-unit` and `checks-lanes` jobs passed (below the table), or in the newer-run case of [the e2e job](#the-e2e-job).                                                                                                                             |
 | `go`         | yes      | In `agent/`, `host/ksm-exec`, `host/oci-fetch` and `host/uffd-handler`: `gofmt`, `go vet`, golangci-lint, govulncheck, deadcode, the tests; the agent's again as root with the `root` tag. Also `gofmt`, vet and lint on the Go module in `scripts/dockerfile-difftest/`. |
 | `shellcheck` | yes      | `bun run lint:shell`, actionlint, the shared workflow lint and zizmor over `.github/`, hadolint over both Dockerfiles, and the tests that shellcheck the shell production code holds as text.                                                                             |
 | `cli`        | yes      | Compiles the CLI for every platform and runs the linux-x64 one; builds the release image's compile stage.                                                                                                                                                                 |
 | `client`     | yes      | Packs `@impz/client`, installs it on the oldest Node it supports, and smokes it under Node, Bun and a compiled Bun binary.                                                                                                                                                |
-| `e2e`        | yes      | Passes only when every `e2e-group` job passed, or when all skipped on a pull request outside their paths: the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                                                             |
-| `zfs`        | yes      | Passes only when every `zfs-shard` job passed, or when all skipped on a pull request outside their paths: real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                                                              |
+| `e2e`        | yes      | Passes only when every `e2e-group` job passed, or when all skipped on a pull request outside their paths, or in the newer-run case (below): the `fast` end-to-end set on real microVMs, in four groups on four runners (below).                                           |
+| `zfs`        | yes      | Passes only when every `zfs-shard` job passed, or when all skipped on a pull request outside their paths, or in the newer-run case (below): real imps on a ZFS pool in three shards, and `scripts/test-zfs.sh` in one (below).                                            |
 | `podman`     | no       | `scripts/run-podman-proof.sh`: the proof that an imp host runs with no Docker engine (below).                                                                                                                                                                             |
 
 The `checks-unit` job runs `bun run test` in two shards of two workers, each capped at 1792 MiB with
@@ -373,8 +375,8 @@ same event and the same head repository. That run's concurrency groups cancelled
 jobs, and its own `e2e` job reports in their place. A fork's branch can share a name with one of
 this repo's, so a run from another repository never counts. `scripts/ci/require-gate.ts` asks GitHub
 for that run. The `e2e` and `zfs` jobs also wait on `host-image`, because a cancelled build skips
-every group after it, and only the build shows the cancel. The `checks` and `zfs` jobs follow the
-same rule.
+every group after it, and only the build shows the cancel. The `checks` and `zfs` jobs pass a
+cancelled job in the same newer-run case, through the same script.
 
 The `host-image` job builds the groups' inputs once per run, with the composite action
 `.github/actions/e2e-build`:
@@ -474,11 +476,11 @@ hand: `gh workflow run reproducible.yml`.
 ### The bench job
 
 `.github/workflows/bench.yml` runs [`impz bench`](../guides/bench.md) on a KVM runner with the e2e
-groups' caches. It is not a required check, and no pull request runs it. A workflow that runs on
+groups' caches. It is not a required check, and no pull request runs it: a workflow that runs on
 pull requests also runs on each release PR, the release job merges a release PR only once every
-check on it passes, and a comparison takes longer than that wait. It compares a baseline with its
-own ref. On a push to a `bench/**` branch, the baseline is the parent of the branch's head, and on a
-dispatch, it is the dispatch's `baseline` input (default `main`):
+check on it passes, and a comparison takes longer than the release job waits. It compares a baseline
+with its own ref. On a push to a `bench/**` branch, the baseline is the parent of the branch's head,
+and on a dispatch, it is the dispatch's `baseline` input (default `main`):
 
 1. The job checks out the baseline beside the ref, and builds each side's kernel, system drive and
    host image, so each side boots its own guest agent and runs its own host binaries, such as the

@@ -11,23 +11,24 @@ holds.
 
 - **KVM** on x86_64, and cgroup v2.
 - **Podman**, rootful, which runs the container.
-- **Storage**: an XFS mount with reflink on the data directory, or a ZFS dataset impd's backend
-  owns, with the modules each needs. The container's ZFS tools must share a major version with the
-  host's module ([storage](./storage/storage.md#zfs)).
-- **A ZFS module with the zfs_uiomove fix**: 2.3.7 or later on the 2.3 line, 2.4.2 or later on the
-  2.4 line, or any later line. An older module can oops the kernel when a kill lands during a disk
-  read, and the oops holds that imp's disk until a reboot
-  ([minimum module versions](./storage/storage.md#zfs)). impd refuses to start on an older module,
-  and its error includes the fixed versions and the override. `IMP_ZFS_ALLOW_UIOMOVE_BUG=1` starts
-  it anyway, with a warning at start and in `/health`, for a host that cannot upgrade.
-- **Memory settings**: overcommit on and little swapping, and on ZFS a capped ARC. The ARC sits
-  outside impd's RAM budget, so the installers set the budget from the host's RAM less a share for
-  the host and the ARC cap.
-- **A pool of huge pages**, only for a host that turns huge pages on, which the host reserves at
-  boot ([huge pages](./lifecycle/huge-pages.md)).
+- **Storage**, an XFS mount with reflink on the data directory or a ZFS dataset impd's backend owns,
+  with the modules each needs. The container's ZFS tools must share a major version with the host's
+  module ([storage](./storage/storage.md#zfs)).
+- **On ZFS, a module with the zfs_uiomove fix**: 2.3.7 or later on the 2.3 line, 2.4.2 or later on
+  the 2.4 line, or any later line. An older module can oops the kernel when a kill lands during a
+  disk read, and the oops holds that imp's disk until a reboot
+  ([minimum module versions](./storage/storage.md#zfs)). The ZFS backend refuses to start on an
+  older module, and its error includes the fixed versions and the override. On a host that cannot
+  upgrade, set `IMP_ZFS_ALLOW_UIOMOVE_BUG=1` to start it anyway, with a warning at start and in
+  `/health`.
+- **Memory settings** that turn overcommit on, keep swapping low and, on ZFS, cap the ARC. The ARC
+  sits outside impd's RAM budget, so the installers set the budget from the host's RAM less a share
+  for the host and the ARC cap.
+- **A pool of huge pages**, reserved at boot, only on a host that turns huge pages on
+  ([huge pages](./lifecycle/huge-pages.md)).
 - **A firewall** that leaves the container engine's rules alone and never flushes the whole ruleset,
   since that removes the NAT the container's traffic leaves through.
-- **An uplink** for the container's tailscaled, and nothing inbound.
+- **An uplink** for the container's tailscaled. imp needs no inbound port on the host.
 
 Each installer writes the environment file, installs the seccomp profile from the image, and
 installs the unit. The unit runs the image with the arguments in one file,
@@ -72,8 +73,8 @@ cannot write the host's sysctls or cgroups by mistake. A real boundary needs the
 without the mount capability, which the jailer's mounts need.
 
 The capability to write file capabilities, which images with `ping` or a privileged server need,
-lets root in the container stamp any capability on a file it can write. The host keeps such files
-inert, because the installers mount the data directory `nosuid`, which ignores setuid bits and file
+lets root in the container stamp any capability on a file it can write. Such files stay inert,
+because the installers mount the data directory `nosuid`, which ignores setuid bits and file
 capabilities alike, and an image is unpacked in a directory no host user can reach.
 
 ## The Docker socket
@@ -81,8 +82,8 @@ capabilities alike, and an image is unpacked in a directory no host user can rea
 imp-host gets no Docker or Podman socket and ships no client for either. impd fetches the builder
 image that every build and pull runs in from its registry
 ([images](./storage/images.md#where-builds-run)), so no process in the container calls the host's
-engine, which only starts and stops imp-host. A missing socket closes one path out of the container
-only: the mount capability above is still a way out.
+engine, which only starts and stops imp-host. The missing socket closes only one path out of the
+container: the mount capability above is still a way out.
 
 ## The host firewall
 
@@ -91,5 +92,5 @@ tailnet reaches impd inside the container, and impd's own tables live in the con
 where the host's firewall never sees them. The owner chooses who owns the host's inbound firewall:
 impz's own table, an input chain that drops all but SSH, ICMP and DHCP, or the platform's firewall,
 such as NixOS's. In nftables a drop in any base chain wins, so impz's table blocks whatever another
-firewall allows, and the NixOS module refuses it beside the platform's. A firewall that filters
-forwarding must admit the container's bridge, or the imps' traffic never leaves.
+firewall allows, and the NixOS module refuses it beside the platform's. If your firewall filters
+forwarding, admit the container's bridge, or the imps' traffic never leaves.

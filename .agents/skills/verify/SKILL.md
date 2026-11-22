@@ -149,9 +149,8 @@ that command alone. A command with neither runs on the registry's first target, 
 | `local-kvm` | [Real VMs](references/local-kvm.md)                   | read-write | Real VMs; 70 s to start.      |
 | `prod`      | [On prod](references/feature-mcp-reads.md#on-prod)    | read-only  | The deployed impd. No `done`. |
 
-Run each feature on the target its file names, whatever target your task names: a feature that says
-"on a real VM" needs `local-kvm`, and its journey fails on `local`. Run the `local` features first,
-then switch targets as [Real VMs](references/local-kvm.md#switch-targets) shows.
+Each feature file's first paragraph names its target and setup, which replace step 2 of Check a
+change. Run the `local` features first.
 
 <!-- /repo -->
 
@@ -168,8 +167,8 @@ for its commands.
 
 <!-- repo: commands -->
 
-- `bun verify mcp call <tool> --args '<json>'` acts as a service client: on `prod`, one that only
-  reads; elsewhere, one that reaches only imps named `wv-mcp-*`.
+- `bun verify mcp call <tool> --args '<json>'` acts as a service client that only reads on `prod`,
+  and elsewhere reaches only imps named `wv-mcp-*`.
 
 Name each imp you create `wv-<name>`, or `wv-mcp-<name>` to reach it over MCP. Destroy it before
 `done`.
@@ -182,7 +181,7 @@ Name each imp you create `wv-<name>`, or `wv-mcp-<name>` to reach it over MCP. D
 
 The registry is [create-verify-registry.ts](../../../scripts/verify/create-verify-registry.ts).
 [feature-paths.ts](../../../scripts/verify/feature-paths.ts) holds each feature's `paths` and the
-registry's one `.ignore` list.
+one `.ignore` list.
 
 <!-- /repo -->
 

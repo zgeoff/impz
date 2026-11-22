@@ -1,5 +1,9 @@
 # MCP server
 
+To give a coding agent imps as tools, add `impz mcp` to the agent with a scoped token
+([add it to an agent](#add-it-to-an-agent)), use [HTTP](#http) for an agent on another machine, and
+turn on the [public route](#public-route) for one outside the tailnet.
+
 `impz mcp` gives a coding agent imps as tools. The agent can create an imp, run a test suite in it,
 checkpoint before a risky change, fork to try two fixes, and destroy what it does not need. The
 server speaks the [Model Context Protocol](https://modelcontextprotocol.io) over stdio. It reaches
@@ -11,7 +15,7 @@ impd also serves the same tools over HTTP at `/mcp`, for an agent on another mac
 
 ## Add it to an agent
 
-The server needs a guard: the imps it may touch. Give the agent a prefix of its own:
+The server needs a guard, which sets the imps it may touch. Give the agent a prefix of its own:
 
 ```sh
 claude mcp add imp -- impz mcp --prefix agent-
@@ -106,7 +110,7 @@ bundle for this boot; otherwise the call fails with `PRECONDITION_FAILED` and no
 field. The SDK's exec types leave it out too.
 
 Only exec and the file tools stop on a cancel. A create, fork or restore that impd has started runs
-to its end, and its result is sent despite the cancel, so the agent learns the name of what it made.
+to its end despite the cancel, so what it made exists afterwards: `imp_list` shows it.
 
 ## Files
 
@@ -180,8 +184,8 @@ claude mcp add --transport http imp https://imp.example.com/mcp \
 - **Revocation.** Removing a token ends its sessions and its `2026-07-28` calls, and stops their
   execs as a cancel does; the next request with the token gets 401. A change to the tailnet ACL or
   to `IMP_TAILNET_IDENTITIES` applies to a tailnet identity on its next request, which impd resolves
-  again: a new scope takes effect, or the request gets 401 once no rule matches. An exec already in
-  flight runs on to its end.
+  again: a new scope takes effect, or the request gets 401 once no rule matches. An exec that
+  tailnet identity already has in flight runs on to its end.
 - **Responses.** A client must accept both `application/json` and `text/event-stream`, as the spec
   says, or gets 406. A request in a 2025-era session gets an SSE stream: a tool call's progress
   notifications, then the response. A `2026-07-28` request gets one JSON response, or an SSE stream
@@ -194,7 +198,7 @@ claude mcp add --transport http imp https://imp.example.com/mcp \
   and `Last-Event-ID` is not supported. A JSON array of messages gets 400.
 
 Exec over HTTP runs inside impd: the tool takes an exec ticket as the CLI does, and the `/exec`
-session is joined in process, not over a socket.
+session is joined in process.
 
 ## Public route
 
@@ -202,18 +206,18 @@ An MCP client that signs in with OAuth, such as a hosted connector, cannot hold 
 reach the tailnet. impd can serve it a second `/mcp` on a public origin, behind a TLS front the
 operator runs. The route is off until `IMP_MCP_PUBLIC_URL` is set.
 
-| Path                                                   | What it serves                                           |
-| ------------------------------------------------------ | -------------------------------------------------------- |
-| `/mcp`                                                 | the same tools and rules as [HTTP](#http)                |
-| `/.well-known/oauth-protected-resource/mcp`            | protected resource metadata (RFC 9728), also at the root |
-| `/.well-known/oauth-authorization-server`              | authorization server metadata (RFC 8414)                 |
-| `/oauth2/authorize`, `/oauth2/token`, `/oauth2/revoke` | authorization, the token endpoint, revocation (RFC 7009) |
-| `/login`, `/consent`                                   | the two sign-in pages                                    |
-| `/enroll`                                              | the page that enrolls the owner's passkey                |
-| `/error`                                               | the page for a sign-in the server refuses to start       |
+| Path                                                   | What it serves                                                   |
+| ------------------------------------------------------ | ---------------------------------------------------------------- |
+| `/mcp`                                                 | the same tools as [HTTP](#http), for an OAuth access token alone |
+| `/.well-known/oauth-protected-resource/mcp`            | protected resource metadata (RFC 9728), also at the root         |
+| `/.well-known/oauth-authorization-server`              | authorization server metadata (RFC 8414)                         |
+| `/oauth2/authorize`, `/oauth2/token`, `/oauth2/revoke` | authorization, the token endpoint, revocation (RFC 7009)         |
+| `/login`, `/consent`                                   | the two sign-in pages                                            |
+| `/enroll`                                              | the page that enrolls the owner's passkey                        |
+| `/error`                                               | the page for a sign-in the server refuses to start               |
 
-Every other path gets the same 404, and a request whose `Host` is not the origin's gets 403. `/`
-answers as `/mcp`. The authorization server is the shared `@zgeoff/mcp-auth` package over impd's own
+`/` answers as `/mcp`. Every other path gets the same 404, and a request whose `Host` is not the
+origin's gets 403. The authorization server is the shared `@zgeoff/mcp-auth` package over impd's own
 database, and it serves the pages it sends a browser to. The route follows the MCP authorization
 spec of 2026-07-28: PKCE with S256, a resource indicator (RFC 8707) bound to `<origin>/mcp`, and
 `iss` on the redirect that carries a code (RFC 9207). It has no dynamic registration and no client
@@ -243,18 +247,19 @@ ID metadata documents: the operator adds each client.
 
 6. In the client, give `https://imp.example.com/mcp` and the client ID.
 
-impd takes nothing on the route as an identity but an access token from a grant. It refuses an imp
-token, the dashboard's cookie and a tailnet identity, and never reads `X-Forwarded-*`, `Forwarded`,
-`CF-Connecting-IP` or `x-imp-peer`. Every request comes through the front, so the limits count per
-route, client and grant, never per address. impd logs no code, token or query.
+impd accepts one identity on the route: an access token from a grant or from a
+[service client](#service-clients). It refuses an imp token, the dashboard's cookie and a tailnet
+identity, and never reads `X-Forwarded-*`, `Forwarded`, `CF-Connecting-IP` or `x-imp-peer`. Every
+request comes through the front, so the limits count per route, client and grant, never per address.
+impd logs no code, token or query.
 
 ### Sign in
 
 1. The client opens authorization, which sends the browser to the login page. Sign in with your
    passkey.
-2. The consent page names the client, where it returns and the scopes it asks for. Untick a scope to
-   leave it out, name the imps the grant reaches, such as `agent-*`, or `*` for every imp, and
-   approve.
+2. On the consent page, check the client's name, where it returns and the scopes it asks for. Untick
+   a scope to leave it out, name the imps the grant reaches, such as `agent-*`, or `*` for every
+   imp, and approve.
 
 Approve only a sign-in you started: anyone can open the login page for a client impd knows. Each imp
 pattern is an imp name, or a prefix and a trailing `*`; the consent takes at most 32. An OAuth grant
@@ -269,7 +274,7 @@ that token, and it ends with the token. impd checks it against the token on ever
 ### Service clients
 
 An agent with no person present, such as a CI job, signs in to the public route with the OAuth
-`client_credentials` grant. Two files describe its clients, and impd reads both at start. Set
+`client_credentials` grant. List its clients in two files, which impd reads at start. Set
 `IMP_MCP_SERVICE_TOKEN_FILE` and `IMP_MCP_SERVICE_CLIENTS_FILE` to their paths
 ([configuration](./configuration.md#public-mcp-route)). With neither set, impd serves no service
 clients. With one, it refuses to start and names the other.
@@ -286,31 +291,33 @@ digests, and the scopes its token may carry. `resource` is `<origin>/mcp`.
 }
 ```
 
-The clients file gives the imps each client reaches. `imps` holds 1 to 32 patterns, as the consent
-page takes them, and `*` reaches every imp, so write it where you mean it. It is never `null`.
+In the clients file, give the imps each client reaches. `imps` holds 1 to 32 patterns, as the
+consent page takes them, and `*` reaches every imp, so write it where you mean it. `imps` is never
+`null`.
 
 ```json
 { "clients": { "ci-runner": { "imps": ["ci-*"] } } }
 ```
 
-A client the token file names and the clients file does not gets 401 on `/mcp`.
+A client in the token file but missing from the clients file gets 401 on `/mcp`.
 
-The client sends its ID, `service:<name>`, and its secret in a `client_secret_basic` header to
-`/oauth2/token` with `grant_type=client_credentials`, and gets a 600-second access token capped to
-its scopes. It acts with the highest scope its token holds, on the imps of its entry. Like an OAuth
-grant, it grants and revokes no secrets. impd audits its calls with the actor `service`.
+To get a token, send the client's ID, `service:<name>`, and its secret in a `client_secret_basic`
+header to `/oauth2/token` with `grant_type=client_credentials`. impd returns a 600-second access
+token capped to the client's scopes. It acts with the highest scope its token holds, on the imps of
+its entry. Like an OAuth grant, it grants and revokes no secrets. impd audits its calls with the
+actor `service`.
 
-A restart of impd reloads both files: `podman exec imp-host pkill -HUP -x impd` restarts it in
-place, and the new impd reads them again. The restart forgets every access token it issued, so each
-client gets one 401 and asks for a new token. To rotate a secret, add the new digest, restart, move
-the client to the new secret, then drop the old digest and restart again. A client whose digest the
-file drops gets `invalid_client` on its next token request.
+To reload both files, restart impd in place: `podman exec imp-host pkill -HUP -x impd`. The restart
+forgets every service client's access token, so each service client gets one 401 and asks for a new
+token. To rotate a secret, add the new digest, restart, move the client to the new secret, then drop
+the old digest and restart again. A client whose digest the file drops gets `invalid_client` on its
+next token request.
 
 ### Tokens and revocation
 
 | Credential    | Lifetime                                                                         |
 | ------------- | -------------------------------------------------------------------------------- |
-| access token  | 15 minutes                                                                       |
+| access token  | 15 minutes; a service client's, 600 seconds                                      |
 | refresh token | rotates on each use; a 30-day inactivity timeout, not an absolute grant lifetime |
 | code          | 10 minutes, once                                                                 |
 | sign-in       | 10 minutes; 3 wait for each client, and 16 in all                                |
@@ -330,12 +337,12 @@ sessions end, its running commands stop as a cancel stops them, its unused exec 
 nothing, and its next request gets 401. A code works once.
 
 An open stream checks its access token again every 10 minutes and ends when the token no longer
-passes, so a revoke from another process, or an expired token, ends it within 10 minutes. A client
-sends a long tool call with a fresh token.
+passes, so a revoke from another process, or an expired token, ends it within 10 minutes. Send a
+long tool call with a fresh token.
 
 A refresh token is strictly single use, with no grace window. A spent refresh token that comes again
-ends its grant, so two refreshes of one token at once leave the client with no working token. A
-client must send one refresh at a time. After a lost response or a reuse failure, it signs in again.
+ends its grant, so two refreshes of one token at once leave the client with no working token. Send
+one refresh at a time. After a lost response or a reuse failure, sign in again.
 
 The route takes bearer tokens alone. A token request that sends a DPoP proof gets a bearer token,
 because impd checks no proof on `/mcp`, and a token bound to a key is refused there.
@@ -344,10 +351,11 @@ A restart ends the sign-ins in progress and their codes, not the grants.
 
 ### Limits
 
-- 64 open requests. A tool call counts until its tool ends, even when its client goes: a dropped
-  stream is no cancel. Send `notifications/cancelled` to stop a call. With every slot taken, a
-  notification of at most 16 KiB and a session's `DELETE` still get through, 16 at a time, since
-  they start no work.
+- 64 open requests. A tool call counts until its tool ends, even when its client goes. A dropped
+  `2026-07-28` request stops its call, which counts until it has stopped; in a 2025-era session a
+  dropped stream is no cancel, so send `notifications/cancelled` to stop a call. With every slot
+  taken, a notification of at most 16 KiB and a session's `DELETE` still get through, 16 at a time,
+  since they start no work.
 - 16 sign-ins wait at once, and 3 for one client; 10 start per minute. The 5th failed passkey login
   ends its sign-in.
 - 16 sessions per grant.

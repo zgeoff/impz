@@ -2,8 +2,8 @@
 
 imp gives you small Linux computers. Each one is a Firecracker microVM with real root, its own
 kernel and Docker inside. It sleeps when it is idle, and the next request wakes it with its disk and
-memory as they were. [`docs/architecture/overview.md`](docs/architecture/overview.md) explains how
-the pieces fit, and [`docs/runbooks/development.md`](docs/runbooks/development.md) holds the checks,
+memory as they were. Read [`docs/architecture/overview.md`](docs/architecture/overview.md) for how
+the pieces fit, and [`docs/runbooks/development.md`](docs/runbooks/development.md) for the checks,
 the end-to-end harness, worktree dev instances, the hooks, and CI.
 
 ## Required reading
@@ -25,11 +25,13 @@ The rules a task needs are not repeated here. Load the skill for the work before
 
 When you write or edit a skill:
 
-1. Load the `skill-writing`, `cold-read` and `deslop` skills from `.agents/skills/`. Install none of
-   them yourself: repo-sync, the job that copies shared files into this repo, delivers them there.
-2. Do every step in the "Check it" section of `.agents/skills/skill-writing/SKILL.md`. In its last
-   step, tick the Deslop and Cold read lines of the PR template's `## Checks` section, each with the
-   short hash of the commit you checked, and leave the chex line for CI.
+1. Load the `docs-writing`, `skill-writing`, `cold-read` and `deslop` skills from `.agents/skills/`.
+   Install none of them yourself: repo-sync, the job that copies shared files into this repo,
+   delivers them there.
+2. Do every step in the "Check it" section of `.agents/skills/skill-writing/SKILL.md`, on any host.
+   Where a step runs the chex checks, run `bun run check:docs`, which runs this repo's set of them.
+   In its last step, tick the Deslop and Cold read lines of the PR template's `## Checks` section,
+   each with the short hash of the commit you checked, and leave the chex line for CI.
 
 ## Repo structure
 
@@ -79,15 +81,15 @@ docs/
 
 ## Consumers
 
-imp is a standalone sandbox host, so its docs, code and tests name no product that uses it. A rule
-that only one consumer's deployment needs, such as the order in which that consumer and impd
-upgrade, belongs in the consumer's own repo. Here, state the general rule, and give an example
-consumer an invented name.
+imp is a standalone sandbox host, so name no product that uses it in its docs, code or tests. Put a
+rule that only one consumer's deployment needs, such as the order in which that consumer and impd
+upgrade, in that consumer's own repo. Here, state the general rule, and give an example consumer an
+invented name.
 
 ## Packages
 
-- Every external version lives once, in the root `workspaces.catalog`. A package writes `"catalog:"`
-  for an external dependency and `"workspace:*"` for an internal one.
+- Declare every external version once, in the root `workspaces.catalog`. In a package, write
+  `"catalog:"` for an external dependency and `"workspace:*"` for an internal one.
 - Pin exact versions, with no `^` or `~` ranges. `bun add` already saves exact versions, through the
   `exact` setting in [`bunfig.toml`](bunfig.toml); the rule is for hand-written edits.
 - The `zgeoff/import-zones` options in [`.oxlintrc.json`](.oxlintrc.json) hold the package
@@ -100,37 +102,37 @@ consumer an invented name.
   `@impz/daemon/test-utils`. Put a helper that knows nothing about imp in
   `packages/shared/src/test-utils/`.
 - impd's code in `packages/daemon/src/` sits in one folder per layer, and the `daemon-layer-*`
-  entries of `zgeoff/import-zones` give the order: a layer imports only itself and the layers below
-  it. The composition root sits above every layer: `main.ts` at the top of `src/`, and
+  entries of `zgeoff/import-zones` give the order. In a layer, import only from that layer and the
+  layers below it. The composition root sits above every layer: `main.ts` at the top of `src/`, and
   `create-impd.ts` with its siblings in `src/impd/`. They build impd from the layers.
 - The vm layer's folders, in `packages/daemon/src/vm/`, follow the same rule among themselves: the
-  `daemon-vm-folder-*` entries give their order, so no import cycle runs between two vm folders. A
-  new vm folder takes a place in that order.
+  `daemon-vm-folder-*` entries give their order, so no import cycle runs between two vm folders.
+  Give a new vm folder a place in that order.
 - The broker's folders in `packages/daemon/src/network/broker/` follow the same rule: the
   `daemon-broker-folder-*` entries give their order, and `broker-service.ts` sits above them all.
 - The agent's packages in `agent/internal/` sit in one folder per layer, and the `layer-*` depguard
   rules in [`agent/.golangci.yml`](agent/.golangci.yml) give the order and deny each upward import.
-  A new package goes in its layer's folder and takes that layer's rule. Two packages sit outside the
+  Put a new package in its layer's folder, under that layer's rule. Two packages sit outside the
   folders: `proto`, whose path the generated Go code sets, belongs to the bottom layer, and
   `contract` holds the golden tests whose fixtures impd's tests read by path, so moving those
   fixtures breaks impd's tests.
 
 ## Commands
 
-[`docs/runbooks/development.md`](docs/runbooks/development.md) lists every check. These are the ones
-with a catch:
+Find every check in [`docs/runbooks/development.md`](docs/runbooks/development.md). These are the
+ones with a catch:
 
 - Run the unit tests with `bun run test`. A bare `bun test` skips the dashboard, whose component
   tests need a DOM, but runs every lane's files too. Run the dashboard with
   `bun run test:dashboard`.
 - `bun run lint` is plain oxlint. `bun run lint:full` adds the type-aware pass and the type check.
-  oxlint runs both through `tsrs-lint`, which the `tsrs` package ships and oxlint finds on its own,
-  in tsgolint's place, because stock tsgolint runs out of memory on this repo on a 2 GiB host. The
-  script sets `TSRS_FAST=1`, tsrs's fast mode. `bun run typecheck` runs `tsrs --fast`. `lint:full`
-  is CI-only: never run it locally.
-- lefthook runs the checks in [`lefthook.yml`](lefthook.yml) before a commit and a push. On a 2 GiB
-  host, leave the other checks to CI. `bun run check` runs every check, `lint:full` included, so
-  leave it to CI too.
+  oxlint runs both through `tsrs-lint` in tsgolint's place, because stock tsgolint runs out of
+  memory on this repo on a 2 GiB host. The `tsrs` package ships `tsrs-lint`, and oxlint finds it on
+  its own. `lint:full` sets `TSRS_FAST=1`, tsrs's fast mode. `bun run typecheck` runs `tsrs --fast`.
+  `lint:full` is CI-only: never run it locally.
+- lefthook runs the checks in [`lefthook.yml`](lefthook.yml) before a commit and a push.
+  `bun run check` runs every check, `lint:full` included, so it is CI-only too. On a 2 GiB host,
+  leave every check outside lefthook to CI, except `bun run check:docs` for a skill edit.
 - For the Go agent, run `gofmt -l .` and `go vet ./...` in [`agent/`](agent/). golangci-lint,
   govulncheck and the race tests in [`scripts/test-go.sh`](scripts/test-go.sh) each need more than 2
   GiB, so leave them to CI on a 2 GiB host.
@@ -138,4 +140,4 @@ with a catch:
   `nix flake check` runs the NixOS module's checks. The VM check needs KVM.
 - Each checkout runs a dev instance of its own through [`scripts/dev/dev.sh`](scripts/dev/dev.sh),
   so give a worktree its own `IMP_DEV_NAME` and `IMP_DEV_PORT_OFFSET`. After you remove a worktree,
-  `dev.sh prune` removes its host container image.
+  run `dev.sh prune` to remove its host container image.

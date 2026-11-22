@@ -2,18 +2,21 @@
 
 impd backs up each imp's disk, its checkpoints and the images they come from to a
 [restic](https://restic.net) repository off the host: an S3 bucket, a REST server, or anything else
-restic speaks. Backups are off until `IMP_BACKUP_REPOSITORY` is set
-([configuration](./configuration.md#backups)). [Backups](../architecture/storage/backups.md) in the
-architecture docs covers what a run does.
+restic speaks. An imp made with `--no-backup` is left out, as below. Backups are off until
+`IMP_BACKUP_REPOSITORY` is set ([configuration](./configuration.md#backups)). For what a run does,
+see [Backups](../architecture/storage/backups.md) in the architecture docs.
 
-- `impz backup run` backs up now; the schedule does the same every `IMP_BACKUP_INTERVAL_S`.
+As a host owner, start by creating the bucket, setting the backup settings and running
+`impz backup run`. To restore, use the commands under [Restore](#restore).
+
+- `impz backup run` backs up now; impd also backs up on its own every `IMP_BACKUP_INTERVAL_S`.
 - `impz backup ls` lists the restore points, oldest first, with the last prune and check.
 - `impz backup restore <name> [--as <new>] [--at <time>]` brings one imp back, stopped.
 - `impz backup restore --all [--merge]` brings back every imp the backup holds: a whole host.
 - `impz backup check [--subset 5%]` reads part of the repository back and verifies it.
 
-`impz backup run`, `restore` and `check` answer when the work ends, and wait up to 24 hours for it,
-however long impd stays silent meanwhile.
+`impz backup run`, `restore` and `check` return when the work ends, and wait up to 24 hours for it,
+even while impd sends nothing.
 
 `impz new --no-backup` creates an imp that no backup ever holds: neither its disk nor its
 checkpoints reach the repository, for the imp's life. Use it for an imp whose disk holds text you
@@ -21,10 +24,10 @@ must be able to delete for good, such as an agent's transcripts. A fork of it is
 template of it is refused. `impz backup run` lists it as not backed up, and a restore of it fails
 with the reason ([imps left out](../architecture/storage/backups.md#imps-left-out)).
 
-`IMP_BACKUP_DATABASE=true` puts impd's database in each backup too, so a whole-host restore brings
-back the named tokens, the SSH keys bound to them, the grants and the names of the secrets. It is
-off by default. restic encrypts the copy, which holds each token's hash but no token's secret and no
-secret's value ([the database copy](../architecture/storage/backups.md#the-database-copy)).
+Set `IMP_BACKUP_DATABASE=true` to put impd's database in each backup too, so a whole-host restore
+brings back the named tokens, the SSH keys bound to them, the grants and the names of the secrets.
+It is off by default. restic encrypts the copy, which holds each token's hash but no token's secret
+and no secret's value ([the database copy](../architecture/storage/backups.md#the-database-copy)).
 
 **Create the bucket first.** restic does not exit when the bucket is missing: it retries for
 minutes, and the first run then fails.
@@ -41,16 +44,17 @@ impz backup restore --all --merge               # add every imp to a host that h
 - `--at` picks the newest restore point at or before the time. **The time is UTC.** A time without a
   zone, such as `2026-10-02T06:00`, is read as UTC, not as the local time of the machine that runs
   the CLI.
-- A restored imp is **stopped**, with a new slot and address. `impz start` boots it. It keeps its
-  id, unless an imp on the host holds that id, such as the original beside a copy that `--as`
+- A restored imp is **stopped**, with a new slot and address. Boot it with `impz start`. It keeps
+  its id, unless an imp on the host holds that id, such as the original beside a copy that `--as`
   restores.
-- A name in use stops the restore with a conflict that names the imp; `--as` picks another name.
-- `--all` refuses a host that has imps, unless `--merge`. With `--merge`, every name is checked
-  first, and a clash names the imp; nothing is restored then.
+- When the name is in use, the restore stops with a conflict that names the imp; pick another name
+  with `--as`.
+- `--all` refuses a host that has imps, unless you add `--merge`. With `--merge`, the restore checks
+  every name first; on a clash, it names the imp and restores nothing.
 - Each grant comes back, with its method and path filter, when a secret of that name exists on this
-  host. The rest are listed, and `impz backup restore` prints them. Secret values are never in a
-  backup: add the secrets first, with `impz secret add`, or restore every imp from a backup with the
-  database copy, which brings the secrets back without their values.
+  host. `impz backup restore` prints the rest. Secret values are never in a backup: add the secrets
+  first, with `impz secret add`, or restore every imp from a backup with the database copy, which
+  brings the secrets back without their values.
 
 ## Whole-host restore
 
@@ -63,11 +67,11 @@ impz backup restore --all --merge               # add every imp to a host that h
    backup.
 4. Without `IMP_BACKUP_DATABASE` on the old host, add the connector secrets the imps need
    (`impz secret add`); their grants come back by name. With it, skip this step: a secret you add
-   first gets a new generation, which the restored tokens' grantable lists do not name.
+   first gets a new generation, which the restored tokens' grantable lists do not include.
 5. Run `impz backup restore --all`, with `--at` for an older point. From a backup with the database
    copy, it also brings back each named token with its SSH keys, and each secret without its value,
-   and prints their names. A token's own secret works again; a token whose name the host has stays
-   as it is, and the restore lists it.
+   and prints their names. A restored token's own secret works again. When the host already has a
+   token of that name, the restore leaves the host's token as it is and lists it.
 
    **CAUTION:** a token deleted after the backup point comes back with it, and its secret works
    again. Delete each such token once more with `impz token rm`.
@@ -76,7 +80,8 @@ impz backup restore --all --merge               # add every imp to a host that h
    `impz secret add <name> ... --replace`, with the kind and rules it had. A replace with the same
    rules is a rotation ([rotate or rebind](./connectors.md#rotate-or-rebind)), so its grants and the
    tokens that may grant it keep working.
-7. Start the imps you need. Sleeping imps come back stopped: memory snapshots are not backed up.
+7. Start the imps you need. Every imp comes back stopped, a sleeping one too, because memory
+   snapshots are not backed up.
 
 A restore of every imp leaves out the OAuth clients that sign in to impd's MCP endpoint: each one
 signs in again.
@@ -104,9 +109,12 @@ copy elsewhere: without it, no backup can be restored.
 
 ## Locks
 
-restic takes a lock in the repository for every command, and impd drops its own stale ones before
-each run, restore, prune and check. A live lock is never removed: every restic command impd runs
-waits a while for another process's lock, such as your own restic, and `impz backup ls` reads
-without a lock, so it never waits behind a prune. The host container has a fixed host name, so a
-restarted container recognizes its own locks; with a changing name, such a lock blocks prune and
-check until restic counts it stale.
+restic takes a lock in the repository for every command. Before each run, restore, prune and check,
+impd runs `restic unlock`, which drops only the locks restic counts as stale: a lock held under its
+host name whose process is gone, or one nobody has refreshed for a long time. So impd removes no
+other process's live lock, as long as no other machine shares its host name
+([step 1 above](#whole-host-restore)). Every restic command impd runs waits a while for another
+process's lock, such as your own restic. `impz backup ls` reads without a lock, so it never waits
+behind a prune. The host container has a fixed host name, so a restarted container recognizes its
+own locks; with a changing name, the old container's lock blocks prune and check until restic counts
+it stale.

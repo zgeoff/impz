@@ -8,10 +8,11 @@ proxy, the SSH gateway or a tunnel, asks the lifecycle for one.
 
 ## States
 
-An imp is in one of five states. A transition table names the legal moves, and any other move fails
-with `INVALID_STATE`. The state write checks the table itself, and it takes only a record read under
-the imp's lock, so no command moves an imp past the table. A destroy works from every state and is
-no transition: it removes the imp.
+An imp is in one of five states. A transition table holds the legal moves, and any other move fails
+with `INVALID_STATE`. The database's state write checks the table itself, so nothing moves an imp
+past the table. The lifecycle calls it through a wrapper that takes only a record read under the
+imp's lock. A destroy works from every state and is no transition: it removes the imp. Like every
+other call, it is refused with `MOVING` while the imp is moving between hosts.
 
 ```mermaid
 stateDiagram-v2
@@ -41,7 +42,7 @@ memory it brought. The table opens that edge to the commit alone, so a sleep ref
 `running` means a VM is up and its agent answered. `sleeping` means the VM is gone and a committed
 memory snapshot is on disk. `stopped` means there is neither, and the next use boots the disk cold.
 `error` holds an imp whose create or boot failed in a way impd could not undo, and a start or a stop
-leaves it.
+takes it out of `error`.
 
 Anything that needs a VM wakes a sleeping imp and boots a stopped one: an exec, a console, a proxied
 request, an SSH login, a tunnel, a service change, a checkpoint and a lease. A stop frees the imp's
@@ -53,14 +54,14 @@ Each imp has one lifecycle lock, a FIFO queue in impd's memory keyed by the imp'
 sleep, wake, stop and destroy of one imp runs under it, so two calls never change one imp's VM at
 once, and a second wake that queues behind the first finds the imp running and returns. Under the
 lock the caller gets the imp's record read again, as a type only the lock module can make, and the
-VM operations take only that type. So no boot, sleep or wake can run without the lock. A new imp's
-row is written under the lock it is created with, and nothing else reaches the imp before its create
-holds it.
+VM operations take only that type. So no boot, sleep or wake can run without the lock. A create
+holds the new imp's lock before it writes the row, so nothing else reaches the imp first.
 
 One state change runs outside the lock: a liveness repair. A read that finds an imp's VM dead, or
 its snapshot lost, marks it stopped with a conditional update, and skips the repair while the imp's
 lock is taken, so it never hides a VM that a start under the lock just booted. The conditional
-update goes through the same state write and checks the same table.
+update calls the database's state write directly, without the lock's wrapper, and so checks the same
+table.
 
 The repair also records why the VM died, when impd can tell. A VM that its memory limit killed is
 named as such. A VM lost after a kernel oops is named as an oops and kept off its disk until the
@@ -75,15 +76,15 @@ An oops kills one thread and not its process, so a Firecracker can outlive the o
 die much later. impd therefore blames the oops only on the VM whose Firecracker owned the killed
 thread: it reads the thread's id from the oops header in the kernel log and matches it against the
 threads the resource sampler saw in each VM. It keeps that match after the VM leaves the sampler, so
-a VM lost later is judged against it. The log names the thread by its id in the host's PID
-namespace, so impd matches only when it runs in that namespace, because a container's thread ids are
-other numbers that may collide with it. When impd runs elsewhere, cannot read the oops from the log,
-or finds that no VM owned the thread, any VM may hold the disk, so impd blames the oops on every VM
-lost after it that was running when impd first read the flag set.
+a VM lost later is judged against it. The log gives the thread's id in the host's PID namespace, so
+impd matches only when it runs in that namespace: inside a container, the same number can belong to
+another thread. When impd runs elsewhere, cannot read the oops from the log, or finds that no VM
+owned the thread, any VM may hold the disk, so impd blames the oops on every VM lost after it that
+was running when impd first read the flag set.
 
-While the imp holds the oops, impd refuses a start or a wake of it with an error that asks for the
-reboot ([a kernel oops](../../guides/operations.md#a-kernel-oops)). The hold lives in the imp's
-record with the kernel's boot id, so it outlasts the reboot that freed the disk. At start impd
+While the imp holds the oops, impd refuses a start or a wake of it with an error saying the host
+needs a reboot ([a kernel oops](../../guides/operations.md#a-kernel-oops)). The hold lives in the
+imp's record with the kernel's boot id, so it outlasts the reboot that freed the disk. At start impd
 clears every hold when it reads the flag clear, because only a reboot clears the flag. It also
 clears a hold that records another boot's id, whatever the flag reads, because an oops in another
 task between the reboot and impd's start sets the flag again without holding the imp. A read that
@@ -94,7 +95,7 @@ an impd that did not record one or could not read it, waits for a clear read too
 Background work never waits for a lock. The idle loop, the governor, the watchdog and the memory
 controller try the lock and skip the imp when anything holds it or waits for it. The governor holds
 its own admission lock while it sleeps imps, and a boot waiting for admission holds an imp's lock,
-so a governor that waited for imp locks could deadlock with it.
+so a governor that waited for imp locks could deadlock with that boot.
 
 The lock also gates moves. While an imp is marked as moving between hosts, the lock refuses every
 call with `MOVING`, by name or by ID, except the move's own steps and impd's start-up repair
@@ -116,7 +117,7 @@ A lease keeps an imp awake on purpose. Each lease belongs to one caller, by its 
 label and an end, and an acquire wakes or boots the imp. The imp's hold is the latest end of its
 live leases, and the idle loop and the governor both skip a held imp. A lease taken through the
 lease API also blocks a user's sleep or stop, which fails with `LEASED` unless the caller passes
-`force`, and that ends the leases. The `hold` label that `impz hold` writes keeps the imp awake but
+`force`, which ends the leases. The `hold` label that `impz hold` writes keeps the imp awake but
 never blocks a sleep or stop. Nothing renews a lease for its holder: a holder that dies leaves its
 lease to run out at its end, and deleting a token ends none of its leases.
 
@@ -139,7 +140,7 @@ after a few in an hour, so a guest that hangs on every boot does not loop.
 A stop asks the agent to shut the guest down, kills Firecracker if it outlives a grace period,
 removes the imp's cgroup and drops its snapshot. A destroy kills the VM, then removes the cgroup,
 the jail, the tap, the slot and the files, and deletes the row last. So a destroy that a crash cuts
-short leaves a row that names what is left, and the next destroy finishes it.
+short leaves its row, which records what is left, and the next destroy finishes it.
 
 A caller names the imp to destroy, and can pass the ID it read for that imp too. Between that read
 and the destroy, another caller can destroy the imp and make a new one under the same name. impd
@@ -147,13 +148,13 @@ takes the lock of the imp that holds the name, and then compares its ID with the
 passed. When the two differ, impd keeps the imp and fails with `CONFLICT`. Because the compare runs
 under the lock, another call cannot replace the imp between the compare and the destroy. A move from
 another host keeps the imp's ID, and so does a restore of a backup when no other imp holds that ID.
-impd destroys an imp that either brings back under the name, as it would the imp the caller read.
+When either brings the imp back under its name, the IDs match and impd destroys it.
 
 ## impd's own stop
 
 impd closes a shutdown gate before it stops, and after that no VM boots or wakes: those calls fail
-with `SERVICE_UNAVAILABLE`, and a create cut short goes to `error`. Two signals decide what happens
-to the VMs:
+with `SERVICE_UNAVAILABLE`, and a create cut short goes to `error`. The signal that stops impd
+decides what happens to the VMs:
 
 - **SIGTERM or SIGINT** sleeps every awake imp, so a container restart keeps every imp's memory. The
   pass covers sleeping and stopped imps too, since one may be waking or booting under its lock, and

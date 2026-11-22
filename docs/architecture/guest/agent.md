@@ -4,9 +4,11 @@ Every guest runs one program as PID 1, the imp agent, a static Go binary. It com
 system drive, not from the user's image, so any OCI image boots with nothing of impz in it. The
 agent mounts the guest's filesystems, brings up its network, runs the user's processes in an inner
 container, supervises services, reaps orphans, and serves impd over vsock
-([the agent protocol](./protocol.md)). The code is `agent/`.
+([the agent protocol](./protocol.md)).
 
 ## Two drives and a kernel
+
+The agent's code is in `agent/`, and the system drive carries its build.
 
 A guest gets two drives. The first is the user's disk, an ext4 clone of an image that the guest
 reads and writes ([storage](../storage/storage.md)). The second is the system drive, a squashfs that
@@ -55,17 +57,17 @@ namespaces, and the agent's network and hostname. Its PID 1 is the agent binary 
 mode: it mounts the user disk in its own namespace when its copy of the agent's mounts lacks it,
 pivots into it, mounts fresh `/proc`, `/sys`, `/dev` and `/run` there, binds the system drive
 read-only at `/run/imp/sys`, and then forks every user process for the agent over a socket, since a
-Go process cannot join a mount namespace. Inside, the system drive gives every image the helpers
-impd runs, such as the SFTP server and the tar of `impz cp`.
+Go process cannot join a mount namespace. Through that bind, every image has the helpers that impd
+runs, such as the SFTP server and the tar of `impz cp`.
 
 The container exists so that user processes cannot take the agent down by accident. `kill -9 -1`, a
 reboot inside or a full memory ends the container, not the agent, and an `rm -rf /` reaches only the
 user disk. When the inner init dies, every process in the container dies with it, and the agent
-starts the container again with a growing delay. TCP ports and files on the user disk stay. A
-container that keeps dying soon after its start is a bad start, and after several in a short window
-the agent gives up until the next boot, reports the container down in its ping, and fails each spawn
-with `INNER_DOWN`. impd keeps the latest ping's report in memory for each awake imp, from the ping
-it sends beside each idle check, so `impz ls` marks an imp whose container is down and
+starts the container again with a growing delay. TCP ports and files on the user disk stay. A death
+soon after a start counts as a bad start. After several bad starts in a short window, the agent
+gives up until the next boot, reports the container down in its ping, and fails each spawn with
+`INNER_DOWN`. impd keeps the latest ping's report in memory for each awake imp, from the ping it
+sends beside each idle check, so `impz ls` marks an imp whose container is down and
 `impz info <name>` shows its restarts and last error. After an `rm -rf /` the container stays up
 with nothing to run, and a checkpoint restore brings the files back.
 
@@ -74,8 +76,9 @@ symlink planted in the user's files cannot lead out, and it opens only regular f
 blocking, so a FIFO at `/etc/hosts` cannot hold the boot.
 
 The container is not a security boundary. Root inside holds every capability in the one user
-namespace: it can open its own disk device, change sysctls and mount what it likes. The guest is the
-user's own, and the VM is the boundary ([isolation](../isolation.md)).
+namespace, unless its exec dropped some ([read-only files](#read-only-files)): it can open its own
+disk device, change sysctls and mount what it likes. The guest is the user's own, and the VM is the
+boundary ([isolation](../isolation.md)).
 
 ## Read-only files
 
@@ -92,13 +95,13 @@ API's `files` calls reach, with the same scope as an exec. The agent writes the 
 staged file beside the old one and renames it into place, so a reader inside sees the old file or
 the new, never part of either. It checks each path against one rule, which impd checks before the
 call as well: a few plain segments with no `..` and no leading dot, so no path names a staged file
-or leaves the tree. A full tmpfs refuses the write with `NO_SPACE` and leaves the old file as it
-was.
+or leaves the tree. When the tmpfs is full, the write fails with `NO_SPACE` and the old file stays
+as it was.
 
 The files live in guest memory. A sleep keeps them in the snapshot, and a container restart binds
 the same tmpfs again, so both find them in place. A cold boot ends them, and no checkpoint, fork,
-template or backup carries them, since none of those copies memory. A caller that needs a file after
-a boot writes it again before it starts what reads it.
+template or backup carries them, since none of those copies memory. After a boot, write a file again
+before you start what reads it.
 
 By default the bind refuses writes, and it is no boundary. Root in the container holds
 `CAP_SYS_ADMIN` in the agent's own user namespace, so it can remount the bind writable and change
@@ -118,36 +121,37 @@ mount it copies into a namespace that the tree owns.
 
 The image's own start-up runs as services, outside that tree, so a service such as `dockerd` keeps
 its capabilities. The tree can still ask such a service to act for it, for example a privileged
-container that binds the files, so a caller that drops the capabilities to protect a file also runs
-no `dockerd` that the tree can reach. The tree cannot mount filesystems or start `dockerd` itself. A
-start that drops the capabilities, for a session that runs with them, fails with `BAD_REQUEST`, so
-the caller never attaches to a process that holds them. impd refuses the option for an agent that
-cannot drop the capabilities, because such an agent ignores the field.
+container that binds the files. When you drop the capabilities to protect a file, run no `dockerd`
+that the tree can reach. The tree cannot mount filesystems or start `dockerd` itself. A start that
+drops the capabilities, for a session that runs with them, fails with `BAD_REQUEST`, so the caller
+never attaches to a process that holds them. impd refuses the option for an agent that cannot drop
+the capabilities, because such an agent ignores the field.
 
 ## Execs and services
 
 An exec starts a process in the container with the image's default environment, on pipes or a pty.
 Each non-tty exec starts inside a cgroup leaf of its own, so that no child can fork before it is
-inside, and a stop kills the whole leaf at once. A command runs as root unless the image says
-otherwise, so a process can move itself out of its leaf, and the containers of a `dockerd` it
+inside, and a stop kills the whole leaf at once. A command runs as root unless the image sets
+another user, so a process can move itself out of its leaf, and the containers of a `dockerd` it
 started live in cgroups of their own: a stop does not reach those. A tty exec has no leaf, because
 its session leader owns the terminal's process group.
 
 The agent delegates the memory controller to each non-tty exec, so a command can cap its own memory.
 The exec's cgroup enables the controller for its children and holds no process itself, because the
 kernel lets only a cgroup without processes hand a controller down. The command starts in a leaf
-under it. To cap itself, a process makes a cgroup next to its own, sets `memory.max` and
-`memory.swap.max` there, and moves into it. The cap cgroup sits inside the exec's cgroup, so a stop
-still kills what runs in it, and the agent removes it with the exec's cgroup. A session or a service
-runs in the init's cgroup, whose parent is the namespace root, and the init enables every controller
-at that root, so the same step works there. With `memory.swap.max` at 0, a command that outgrows its
-cap dies by the OOM killer instead of swapping, whatever swap the guest has.
+under it. To cap a command's memory, make a cgroup next to its leaf, set `memory.max` and
+`memory.swap.max` there, and move the command into it. The cap cgroup sits inside the exec's cgroup,
+so a stop still kills what runs in it, and the agent removes it with the exec's cgroup. A session or
+a service runs in the init's cgroup, whose parent is the namespace root, and the init enables every
+controller at that root, so the same step works there. With `memory.swap.max` at 0, a command that
+outgrows its cap dies by the OOM killer instead of swapping, whatever swap the guest has.
 
 An outer exec runs a command as root in the agent's own world, outside the container, to see why the
 container is down or look at the disk after an `rm -rf /` inside. It runs in a small cgroup with a
 hard memory limit, or not at all, and resets its OOM score, so the kernel can kill it. Only a caller
 with host-wide `manage` scope may start one, and impd audits each. It is no new boundary, since root
-inside the container already holds every capability in the guest.
+inside the container, in any exec that keeps its capabilities, already holds every capability in the
+guest.
 
 The service supervisor starts each service file in `/etc/imp/services.d` at boot, logs it, and
 restarts it with backoff when it exits.
@@ -156,7 +160,8 @@ restarts it with backoff when it exits.
 
 The agent is PID 1, so it inherits every orphan in the guest and must reap it. One loop owns every
 wait call, and nothing else in the agent waits on a child, since a per-child wait would race with
-it. Code that spawns a process registers its pid and gets the exit status from the reaper.
+it. To spawn a process in the agent, register its pid with the reaper and take its exit status from
+the reaper.
 
 ## Shutdown
 

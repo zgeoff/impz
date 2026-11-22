@@ -1,14 +1,12 @@
 # Real VMs on local-kvm
 
-Run each feature whose summary says "on a real VM" on `local-kvm`. On `local`, impd fakes its VMs
-and never boots a guest, so those journeys fail there.
+Run each feature whose summary contains "on a real VM" on `local-kvm`. On `local`, impd fakes its
+VMs and never boots a guest, so those journeys fail there.
 
-The mistakes to avoid:
-
-- **Starting `local-kvm` while a `local` run is up.** A run lasts from `bun verify up` to
-  `bun verify down`, and serves one target. End it first.
-- **Removing another session's containers after a crash.** Every run's containers share one name
-  prefix. Remove only your run's.
+- **End a `local` run before you start `local-kvm`.** A run lasts from `bun verify up` to
+  `bun verify down`, and serves one target.
+- **After a crash, remove only your run's containers.** Every run's containers share one name
+  prefix.
 
 ## Switch targets
 
@@ -19,8 +17,8 @@ bun verify up
 bun verify doctor
 ```
 
-Expect: `ok: true` from each, and `data.passed: true` from `doctor`. To go back, run the same four
-commands with `use --target local` as the second.
+Check that each prints `ok: true`, and that `doctor` also prints `data.passed: true`. To go back,
+run the same four commands with `use --target local` as the second.
 
 ## What the machine needs
 

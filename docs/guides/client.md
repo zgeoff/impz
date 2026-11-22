@@ -1,21 +1,25 @@
 # The TypeScript client
 
 `@impz/client` calls every procedure of impd's API with its input and output types, and adds the
-streams that the API serves over WebSockets: exec sessions, consoles, tunnels and forwards. The
-[package README](../../packages/client/README.md) covers the install, the connection and a first
-call. This guide covers the streams, the errors, the features an older impd lacks, and the version
-check.
+streams that the API serves over WebSockets: exec sessions, consoles, tunnels and forwards. For the
+install, the connection, a first call and the tunnel and forward calls, see the
+[package README](../../packages/client/README.md). Past that first call, read on for exec and
+console streams, named and resumed sessions, how a session ends, the errors, destroying by id, the
+features an older impd lacks, and the version check. Start your code with the
+[version check](#versions) and a [feature check](#features) for each newer field it sends, then
+write the calls as the sections below show.
 
 ## Stream a command
 
-`imp.openExec` streams a command's output instead of collecting it, as `imp.run` does. `stdout` and
-`stderr` are `ReadableStream`s that end with the session. `write` takes a string or bytes and waits
-while the socket's buffer is full, so a writer in a loop keeps to the network's pace. It sends a
-large write in frames of at most 1 MiB: impd closes a socket that sends one frame over 16 MiB.
+`imp.openExec` streams a command's output, where `imp.run` collects it. `stdout` and `stderr` are
+`ReadableStream`s that end with the session. `write` takes a string or bytes and waits while the
+socket's buffer is full, so a writer in a loop keeps to the network's pace. It sends a large write
+in frames of at most 1 MiB: impd closes a socket that sends one frame over 16 MiB.
 
 Read or cancel both streams. Output nobody reads waits in memory, and past 8 MiB on one stream
-(`maxUnreadBytes`) the session ends with `OUTPUT_OVERFLOW`. Cancelling both streams ends the session
-and stops the command; so do `close()` and the `signal` option's abort.
+(`maxUnreadBytes`) the session ends with `OUTPUT_OVERFLOW`. Cancelling both streams closes the
+socket, as do `close()` and the `signal` option's abort. Without a `session`, that ends the session
+and stops the command; with a [named session](#named-sessions), it detaches and the command runs on.
 
 ```ts
 const tail = await imp.openExec('dev', ['tail', '-f', '/var/log/app.log']);
@@ -72,12 +76,12 @@ session runs on, `exit` rejects with `DETACHED`, and its `data.reason` says why:
 
 ### Resuming a session
 
-`started.output` places the data in the session's output. With `continuity: 'offsets'` it has the
-generation (`executionGeneration`, one run of the process), the `bootId`, `bufferStart` and `end`,
-and `offset`, the offset of the first data byte after `prelude` mode bytes; `{ continuity: 'none' }`
-means an imp whose agent predates offsets, or an older impd. `exit` resolves with `offset`, and
-`DETACHED` has `data.offset`: the offset after the last byte received. Keep the generation and that
-offset, and resume from them:
+`started.output` gives the data's position in the session's output. With `continuity: 'offsets'` it
+has the generation (`executionGeneration`, one run of the process), the `bootId`, `bufferStart` and
+`end`, and `offset`, the offset of the first data byte after `prelude` mode bytes;
+`{ continuity: 'none' }` means an imp whose agent predates offsets, or an older impd. `exit`
+resolves with `offset`, and `DETACHED` has `data.offset`: the offset after the last byte received.
+Keep the generation and that offset, and resume from them:
 
 ```ts
 const tail = await imp.openAttach('dev', 'main', {
@@ -97,24 +101,26 @@ last cold boots, newest first, with a `cause` (`start`, `wake_fallback`, `watchd
 rejects with `InvalidStateError` instead of booting or waking the imp.
 
 A disconnected client cannot recover bytes below `bufferStart`, any byte of a generation that a cold
-boot ended, or the output of an exec without `session`. Keep what you received if you need them.
-`system.info()` has `features.sessionOffsets` on an impd that carries offsets.
+boot ended, or the output of an exec without `session`. If you need those bytes, keep them as you
+receive them. `system.info()` has `features.sessionOffsets` on an impd that carries offsets.
 
 ## How a session ends
 
 `exit` resolves with `{ code, signal }`, where `code` is null when a signal ended the command. When
-the command did not run to its exit, `exit` rejects with an `ExecError` whose `code` is impd's (as
-in [Errors](#errors), plus `EXEC_FAILED` when the command cannot start and `INNER_DOWN` when the
-imp's container is down) or one of `UNAUTHORIZED` (also for an exec ticket that expired or was
-used), `UNREACHABLE`, `RESTARTING`, `CONNECTION_CLOSED`, `DETACHED`, `BAD_MESSAGE`, `CLOSED`,
-`OUTPUT_OVERFLOW` and `LOCAL_ERROR`. Its `data` is impd's error data.
+the command did not run to its exit, `exit` rejects with an `ExecError`, whose `data` is impd's
+error data. Its `code` comes from impd or from the client. impd's codes include those in
+[Errors](#errors), the three below, `PRECONDITION_FAILED` from [Features](#features), `EXEC_FAILED`
+when the command cannot start and `INNER_DOWN` when the imp's container is down. The client sets
+`UNAUTHORIZED` (also for an exec ticket that expired or was used), `UNREACHABLE`, `RESTARTING`,
+`CONNECTION_CLOSED`, `DETACHED`, `BAD_MESSAGE`, `CLOSED`, `OUTPUT_OVERFLOW` and `LOCAL_ERROR`.
 
 Three codes reject as their own subclasses, with typed `data`: `NoSessionError` (`NO_SESSION`:
 `{ bootId, coldBoots, previous? }`, or no data from an agent without offsets), `InvalidStateError`
 (`INVALID_STATE`: `{ state, allowed, coldBoots? }`) and `InvalidResumeError` (`INVALID_RESUME`:
 `{ end, bufferStart }`, a resume past the end). An abort before the command starts, during the
-ticket call or the connect, rejects with the abort's reason instead, an `AbortError` by default;
-after the start it ends the session as `CLOSED`.
+ticket call or the connect, makes that call reject with the abort's reason instead, an `AbortError`
+by default. An abort after the start closes the socket, as [Stream a command](#stream-a-command)
+says, and `exit` rejects with `CLOSED`.
 
 ## Errors
 
@@ -167,7 +173,7 @@ if (isDefinedError(error) && error.code === 'CONFLICT' && error.data.reason === 
 }
 ```
 
-A service that checks [imp identity](./imp-identity.md) tokens imports `@impz/client/identity`.
+To check [imp identity](./imp-identity.md) tokens in a service, import `@impz/client/identity`.
 
 ## Features
 
@@ -194,13 +200,13 @@ await requireFeatures(imp, { grantableTokens: 'make the token without a grantabl
 ```
 
 Without the `secretRebind` feature, a `replace` that changes the hosts keeps every grant. With it,
-it fails with `CONFLICT` and `data.reason: 'binding_changed'` unless `rebind` is set.
+the `replace` fails with `CONFLICT` and `data.reason: 'binding_changed'` unless `rebind` is set.
 
 `openExec` and `openExecSession` check `execRequire` themselves when `require` is set. With
 `require: ['broker']`, the command starts only once impd set the credential broker's variables and
 CA bundle for this boot; otherwise the exec fails with `PRECONDITION_FAILED` and
-`data: { reason: 'broker_not_ready', detail }`, and nothing runs. Without the feature it fails the
-same way with `reason: 'impd_outdated'` before it sends the start. See
+`data: { reason: 'broker_not_ready', detail }`, and nothing runs. Without the feature, the exec
+fails the same way with `reason: 'impd_outdated'` before the client sends the start. See
 [requiring the broker](./connectors.md#requiring-the-broker).
 
 ## Versions

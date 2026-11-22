@@ -1,7 +1,14 @@
 # Configuration
 
-impz reads environment variables in three places: impd, the host container scripts, and the CLI.
-There is no config file. A server keeps the variables in an env file, `/etc/imp/imp-host.env`
+Look up an environment variable here when you run an imp host, the dev instance or the CLI. Find it
+in the section for what reads it, set it (on a server, in the env file, or in
+`services.imp.settings` on NixOS), and restart what reads it.
+
+impd, the host container scripts, the deploy files, the dev instance and the CLI each read their
+settings from environment variables, and each has a section below. The variables that the deploy
+scripts and the NixOS module set for themselves are in [Not covered here](#not-covered-here). No
+config file sets them; the CLI keeps only its saved hosts in a file ([CLI](#cli)). A server keeps
+the variables in an env file, `/etc/imp/imp-host.env`
 ([`deploy/imp-host.env.example`](../../deploy/imp-host.env.example)), which the systemd unit passes
 to the container. The [NixOS module](./nixos.md#the-env-file) writes its env file to tmpfs and
 mounts it into the container instead. An empty variable counts as unset.
@@ -73,7 +80,7 @@ error.
 | `IMP_JAILER_BIN`                | `jailer`                                  | The jailer binary.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `IMP_KERNEL`                    | none                                      | The guest kernel to copy into `<data>/system/vmlinux` on start. The release image sets its own.                                                                                                                                                                                                                                                                                                                                                                |
 | `IMP_SYSTEM_DRIVE`              | none                                      | The system drive to copy into `<data>/system/drives/` on start; without it, `<data>/system/imp-system.squashfs`. The release image sets its own.                                                                                                                                                                                                                                                                                                               |
-| `TAILSCALE_AUTHKEY`             | none                                      | Set, or `IMP_TAILSCALE_NODE=1`, means the host is on the tailnet; impd then reports tailnet URLs.                                                                                                                                                                                                                                                                                                                                                              |
+| `TAILSCALE_AUTHKEY`             | none                                      | When it or `IMP_TAILSCALE_NODE=1` is set, the host is on the tailnet, and impd reports tailnet URLs.                                                                                                                                                                                                                                                                                                                                                           |
 | `IMP_TAILSCALE_NODE`            | none                                      | `1` when the entrypoint started `tailscaled` from saved node state, with no key. The entrypoint sets it.                                                                                                                                                                                                                                                                                                                                                       |
 | `IMP_TAILSCALE_HOSTNAME`        | `imp`                                     | The tailnet hostname to ask for.                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `IMP_TAILNET_NAMES`             | none                                      | `1` gives each imp a name of its own on the tailnet, as a Tailscale Service ([per-imp names](./tailscale.md#per-imp-names)). Needs the host on the tailnet.                                                                                                                                                                                                                                                                                                    |
@@ -86,11 +93,12 @@ error.
 | `IMP_BUILD_TEST_REGISTRY_CA`    | none                                      | Tests only, with `IMP_BUILD_TEST_REGISTRY`: the PEM file of that registry's CA, which impd copies into each builder.                                                                                                                                                                                                                                                                                                                                           |
 | `IMP_DASHBOARD_DIR`             | none                                      | The built files of the [dashboard](./dashboard.md), served at `/ui/`. The release image sets its own.                                                                                                                                                                                                                                                                                                                                                          |
 
-A host on Linux 6.7 or later does not set a restored TSC back, so it can set
-`IMP_SLEEP_MIN_GUEST_UPTIME_MS=0`: `scripts/dev/bench-wake.sh` with that setting confirms it, with a
-fast median wake ([young guests](../architecture/lifecycle/sleep-and-wake.md#young-guests)).
+Linux 6.7 and later do not set a restored TSC back, so on such a host you can set
+`IMP_SLEEP_MIN_GUEST_UPTIME_MS=0`. To confirm it, run `scripts/dev/bench-wake.sh` with that setting
+and expect a fast median wake
+([young guests](../architecture/lifecycle/sleep-and-wake.md#young-guests)).
 
-[The RAM governor](../architecture/lifecycle/ram-governor.md) explains the RAM and idle settings.
+For the RAM and idle settings, see [the RAM governor](../architecture/lifecycle/ram-governor.md).
 
 ### Huge pages
 
@@ -99,11 +107,12 @@ With `IMP_HUGE_PAGES=2M`, impd runs each imp of fixed memory on the host's pool 
 reserves it, and impd refuses a boot or wake the free pool cannot hold. Pool pages leave the host's
 ordinary RAM for good, and KSM cannot merge them. `IMP_RAM_BUDGET_MIB` counts the pool, so imps on
 ordinary pages, such as elastic imps, share only the budget less the pool
-([huge pages](../architecture/lifecycle/huge-pages.md#ram)). The host needs Linux 6.1 or later,
-whose `/dev/userfaultfd` the unit, `bootstrap.sh`, `dev.sh` and the NixOS module pass into the
-container only while `IMP_HUGE_PAGES=2M` is set. Without the device, impd refuses each boot or wake
-on huge pages with `PRECONDITION_FAILED`. On NixOS, set `IMP_HUGE_PAGES` in `services.imp.settings`,
-never in `environmentFile`, because the module reads the setting to pass the device.
+([huge pages](../architecture/lifecycle/huge-pages.md#ram)). The host needs Linux 6.1 or later, for
+`/dev/userfaultfd`. The unit, `bootstrap.sh`, `dev.sh` and the NixOS module pass that device into
+the container only while `IMP_HUGE_PAGES=2M` is set. Without the device, impd refuses each boot or
+wake on huge pages with `PRECONDITION_FAILED`. On NixOS, set `IMP_HUGE_PAGES` in
+`services.imp.settings`, never in `environmentFile`, because the module reads the setting to pass
+the device.
 
 1. Size the pool to the memory of every 2M imp you expect awake at once, plus the memory of the
    largest imp shape, for a template build on huge pages.
@@ -125,13 +134,14 @@ never in `environmentFile`, because the module reads the setting to pass the dev
    Expect `HugePages_Total: 4096`. A host whose memory is fragmented reserves fewer pages; reserve
    them at boot, on the kernel command line with `hugepages=4096`, to get them all.
 
-4. Set `IMP_HUGE_PAGES=2M` in the env file and restart impd.
+4. Set `IMP_HUGE_PAGES=2M` in the env file, or on NixOS in `services.imp.settings`, and restart the
+   host container (`systemctl restart imp-host`): the device is passed when the container starts.
 
 The default `IMP_WARM_CAP_MIB` warms the whole memory file of a 2 GiB guest. Keep the cap below the
 page cache that the host has beside the pool and, on ZFS, the ARC.
 
-To turn huge pages off, unset `IMP_HUGE_PAGES` and restart impd. Each imp that slept on huge pages
-wakes on ordinary pages from its memory file.
+To turn huge pages off, unset `IMP_HUGE_PAGES` and restart the host container. Each imp that slept
+on huge pages wakes on ordinary pages from its memory file.
 
 ### Backups
 
@@ -191,8 +201,8 @@ With `IMP_MCP_PUBLIC_URL` set, impd serves `/mcp` and its OAuth sign-in to an op
 | `IMP_MCP_SERVICE_CLIENTS_FILE` | none    | The path of the file that limits each service client to imps. Set it with `IMP_MCP_SERVICE_TOKEN_FILE`.                                                          |
 
 With one service file set and not the other, impd refuses to start and names the missing variable. A
-file that fails to parse stops impd at start, with the reason. The files shape and the reload are in
-[service clients](./mcp.md#service-clients).
+file that fails to parse stops impd at start, with the reason. For the files' format and how impd
+reloads them, see [service clients](./mcp.md#service-clients).
 
 ### Telemetry
 
@@ -231,7 +241,7 @@ before anything starts.
 | `IMP_ENV_FILE`               | none                               | `entrypoint`       | A container `--env-file` whose lines the entrypoint exports before anything else, over the image's env. The NixOS module mounts its env file here.                                                                |
 
 **NOTE:** impd and `tailscale-up.sh` read the same `IMP_DNS`, a comma-separated list. `dev.sh` does
-not pass `IMP_DNS`, so the dev instance uses the defaults.
+not pass `IMP_DNS` from your shell, so the dev instance uses the defaults unless `.env` sets it.
 
 **NOTE:** CPU limits need the container in a private cgroup namespace: `--cgroupns=private` on
 `podman run` or `docker run`. `setup-cgroups.sh` turns them off without it
@@ -239,7 +249,8 @@ not pass `IMP_DNS`, so the dev instance uses the defaults.
 
 ## Deploy files
 
-The release's systemd unit reads these, in the env file or the shell.
+The release's systemd unit reads `IMP_PUBLIC_PORTS`, in the env file or the shell, and writes
+`IMP_HOST_PROBED`.
 
 | Variable           | Default               | Read by            | Meaning                                                                                                                                                        |
 | ------------------ | --------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -284,21 +295,22 @@ other secret in it is never printed. It takes `TAILSCALE_AUTHKEY` from the first
    `PATH` and the read works, so other worktrees' dev instances stay off the tailnet. The reference
    defaults to `op://$IMP_OP_VAULT/imp-e2e-tailscale-oauth/client-secret`, the OAuth client of
    `tag:imp-e2e`. impz names no vault of its own: set `IMP_OP_VAULT` to the 1Password vault that
-   holds the client, or set the reference. With neither, `op` is not asked, and a message names the
-   two variables. A client secret (`tskey-client-`) joins ephemeral and preauthorized, as
-   `IMP_TAILSCALE_TAGS` or else `tag:imp-e2e`, so the instance reaches no live impd. The read gets
-   20 seconds, so a locked 1Password app cannot hang a run. A failed read stays quiet and falls
-   through.
+   holds the client, or set the reference. With neither, `dev.sh` skips `op` and prints a message
+   that names the two variables. A client secret (`tskey-client-`) joins ephemeral and
+   preauthorized, as `IMP_TAILSCALE_TAGS` or else `tag:imp-e2e`, so the instance reaches no live
+   impd. The read gets 20 seconds, so a locked 1Password app cannot hang a run. A failed read stays
+   quiet and falls through.
 3. `TAILSCALE_AUTHKEY` in `.env`.
 
 With none of them, the dev instance stays off the tailnet. The key reaches Docker as
 `-e TAILSCALE_AUTHKEY` with no value, so it never shows in argv.
 
-The e2e harness never uses a key or a control server from your environment or `.env`, because a
-`tag:imp` key there reaches a live impd. When a run includes the `tailscale`, `egress` or
-`moves-tailnet` suite, the harness joins the instance to a Headscale tailnet of the run's own, with
-a key it mints there. When a run includes the `tailnet-names` suite with `IMP_E2E_TAILNET_NAMES=1`,
-the harness reads the test tailnet's auth-keys client, from `IMP_E2E_TAILSCALE_AUTHKEY` or else
+The e2e harness drops `TAILSCALE_AUTHKEY` and `IMP_TAILSCALE_LOGIN_SERVER` from the environment it
+gives `dev.sh`, and passes its own key, or an empty one, over any in `.env`, because a `tag:imp` key
+there reaches a live impd. When a run includes the `tailscale`, `egress` or `moves-tailnet` suite,
+the harness joins the instance to a Headscale tailnet of the run's own, with a key it mints there.
+When a run includes the `tailnet-names` suite with `IMP_E2E_TAILNET_NAMES=1`, the harness reads the
+test tailnet's auth-keys client, from `IMP_E2E_TAILSCALE_AUTHKEY` or else
 `op read "$IMP_E2E_TAILSCALE_OAUTH_REF"` (default
 `op://$IMP_OP_VAULT/imp-e2e-test-tailnet-authkeys/client-secret`, with `IMP_OP_VAULT` set as for
 `dev.sh`). It passes that secret to `dev.sh` as `TAILSCALE_AUTHKEY`, with
@@ -308,7 +320,7 @@ the harness reads the test tailnet's auth-keys client, from `IMP_E2E_TAILSCALE_A
 
 `dev.sh` sets `IMP_UPLINK_MTU` from this machine's default route, unless it is set.
 
-impd tuning passes through an allowlist. When set on your machine, `dev.sh` passes
+`dev.sh` passes impd settings from your machine through an allowlist. When they are set, it passes
 `IMP_IDLE_TIMEOUT_S`, `IMP_IDLE_CPU_PERCENT`, `IMP_RAM_BUDGET_MIB`, `IMP_MEMORY_SHRINK_AFTER_S`,
 `IMP_BOOT_RESERVE_PERCENT`, `IMP_BOOT_TEMPLATES`, `IMP_WAKE_RESERVE_MIB`,
 `IMP_SLEEP_MIN_GUEST_UPTIME_MS`, `IMP_DEFAULT_VCPUS`, `IMP_DEFAULT_MEMORY_MIB`,
@@ -322,14 +334,19 @@ impd tuning passes through an allowlist. When set on your machine, `dev.sh` pass
 HTTPS settings except the token: `IMP_DOMAIN`, `IMP_DNS_PROVIDER`, `IMP_DNS_API_URL`,
 `IMP_ACME_DIRECTORY`, `IMP_ACME_EMAIL`, `IMP_HTTPS_PORT`, `IMP_HTTP_PORT`, `IMP_PUBLIC_IP`,
 `IMP_PUBLIC_HTTPS_PORT`, `IMP_PUBLIC_HTTP_PORT`, and `IMP_ACME_CA_FILE` and
-`IMP_BUILD_TEST_REGISTRY_CA` as paths under the repo. `IMP_E2E=1` lets impd use the `challtestsrv`
-DNS provider. With `IMP_BUILD_TEST_REGISTRY` set, the container resolves the registry's name to the
-address your machine resolves it to. With `IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client
-from 1Password into the data directory and sets `IMP_TAILNET_OAUTH_FILE`. `IMP_DEV_NETWORK` puts the
-container on that Docker network. `IMP_DEV_BACKUP_ENV_FILE` names a Docker env file with the
-repository's `AWS_*` keys, so the keys in your own shell never reach the container. Other impd
-variables keep their defaults in the dev container. A ZFS dev instance needs the zfs module on the
-machine; `scripts/zfs-host-test.sh` runs one on a throwaway pool.
+`IMP_BUILD_TEST_REGISTRY_CA` as paths under the repo. Set any other impd variable in `.env`, which
+`dev.sh` passes whole. Set only in your shell, it never reaches the dev container, and impd uses its
+default.
+
+`IMP_E2E=1` lets impd use the `challtestsrv` DNS provider. With `IMP_BUILD_TEST_REGISTRY` set, the
+container resolves the registry's name to the address your machine resolves it to. With
+`IMP_TAILNET_NAMES=1`, `dev.sh` writes the OAuth client from 1Password into the data directory and
+sets `IMP_TAILNET_OAUTH_FILE`. `IMP_DEV_NETWORK` puts the container on that Docker network.
+`IMP_DEV_BACKUP_ENV_FILE` names a Docker env file with the repository's `AWS_*` keys, so the keys in
+your own shell never reach the container.
+
+A ZFS dev instance needs the zfs module on the machine; `scripts/zfs-host-test.sh` runs one on a
+throwaway pool.
 
 ## CLI
 
@@ -379,7 +396,7 @@ So a saved token never goes to the URL in `IMP_URL`, and `IMP_TOKEN` never goes 
 | `XDG_CONFIG_HOME` | `~/.config` | Where the CLI looks for `impz/config.json` and `impz/token`.               |
 
 `IMP_HOST` is a CLI setting. The `IMP_HOST_IMAGE`, `IMP_HOST_ENV_FILE` and `IMP_HOST_DATA` variables
-are for the deploy files and have nothing to do with it.
+are for the deploy files and the dev instance, and have nothing to do with it.
 
 impd writes the token to `<IMP_DATA_DIR>/token` on first start; `scripts/dev/dev.sh token` prints
 it.
@@ -397,11 +414,12 @@ impz completion fish > ~/.config/fish/completions/impz.fish
 
 ## Not covered here
 
-Some `IMP_*` variables are internal to the scripts and tests, not settings: `IMP_ROOT`, `IMP_BUILD`,
-`IMP_DATA`, `IMP_ID`, `IMP_CI_KERNEL`, `IMP_SMOKE_IMAGE`, `IMP_BASE_IMAGE` and `IMP_E2E_*`.
-`IMP_HOST_IMAGE`, `IMP_HOST_ENV_FILE` and `IMP_HOST_DATA` pick the image, the env file and the data
-directory for `deploy/`. `IMP_HOST_FIREWALL` (`own` or `none`) records who owns the host's inbound
-firewall; `deploy/bootstrap.sh` reads it, and impd ignores it
+Some `IMP_*` variables are internal to the scripts and tests: `IMP_ROOT`, `IMP_BUILD`, `IMP_DATA`,
+`IMP_ID`, `IMP_CI_KERNEL`, `IMP_SMOKE_IMAGE`, `IMP_BASE_IMAGE`, and the `IMP_E2E_*` variables that
+[Dev instance](#dev-instance) does not name. `IMP_HOST_IMAGE`, `IMP_HOST_ENV_FILE` and
+`IMP_HOST_DATA` pick the image, the env file and the data directory for `deploy/`; the dev instance
+sets its own `IMP_HOST_IMAGE` ([dev instance](#dev-instance)). `IMP_HOST_FIREWALL` (`own` or `none`)
+records who owns the host's inbound firewall; `deploy/bootstrap.sh` reads it, and impd ignores it
 ([host contract](../architecture/host.md#the-host-firewall)). `IMP_HOST_IPV6` (`on` or `off`),
 `IMP_HOST_SUBNET6` and `IMP_HOST_NETWORK` put `imp-host` on a Podman network with IPv6; the unit and
 `bootstrap.sh` read them, and impd ignores them ([IPv6](./install.md#ipv6)). `IMP_VERSION` and

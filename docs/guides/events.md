@@ -1,7 +1,9 @@
 # Events, audit and telemetry
 
-impd reports what happens to imps three ways: a live event stream, an audit log of the calls that
-changed something, and OpenTelemetry metrics and spans for a collector you run.
+impd reports what happens to imps in a live event stream, in an audit log of the calls that changed
+something, and in OpenTelemetry metrics and spans for a collector you run. Follow the stream with
+`impz events` or the SDK. Read the audit log with `impz audit`, and point impd at a collector with
+`OTEL_EXPORTER_OTLP_ENDPOINT`.
 
 ## The event stream
 
@@ -28,7 +30,8 @@ The dashboard follows the same stream ([dashboard](./dashboard.md)).
 
 ### Resume from a cursor
 
-To pick up where a reader stopped, pass the `seq` and `logId` of the last event it handled:
+To pick up where a reader stopped, pass the `seq` and `logId` of its cursor. Set the cursor by the
+rules at the end of this section:
 
 ```ts
 const events = await client.events.stream({ after: last.seq, logId: last.logId });
@@ -44,25 +47,26 @@ copy of its database or an older impd changed imps after a rollback. An impd wit
 default and 1,000 at most. It returns the events, `hasMore`, and the `after` and `logId` to pass on
 the next call. With no `after`, it returns the snapshot and the head `seq`.
 
-A reader resumes from the `seq` of the last event it received that is not a snapshot event or a
+Resume from the `seq` of the last event the reader received that is not a snapshot event or a
 `Reset`. A snapshot event carries the head `seq`, so a cursor taken from one skips the rest of a
-snapshot that a drop cut short. After a `Reset`, the reader drops its cursor until the next event
-that is not a snapshot event. A stream opened with a cursor also sends `Position` events, and the
-reader resumes from those too. A token limited to some imps then skips the events of the others on
-its next resume. A stream opened with no cursor sends no `Reset` and no `Position`, so a client that
-knows neither kind still reads it.
+snapshot that a drop cut short. After a `Reset`, drop the cursor until the next event that is not a
+snapshot event. A stream opened with a cursor also sends `Position` events; resume from those too.
+With a token limited to some imps, the next resume then skips the events of the other imps. A stream
+opened with no cursor sends no `Reset` and no `Position`, so a client that knows neither kind still
+reads it.
 
 ### Events
 
 Every event has `v` (the format version, now `1`), `at` (when impd wrote it), `seq` (its place in
-impd's log), `logId` (the log it comes from) and `ev` (its kind). A snapshot event carries the `seq`
-of the newest event at the time of the snapshot. A reader skips a kind or a field it does not know.
+impd's log; a snapshot event instead carries the `seq` of the newest event when the snapshot was
+taken), `logId` (the log it comes from) and `ev` (its kind). Skip any kind or field the reader does
+not know.
 
 | `ev`                | Fields                                                   | When                                                                                                                                                                  |
 | ------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ImpAdded`          | `reason` (`snapshot` or `created`), `imp`                | Each imp as the stream opens, then each new imp.                                                                                                                      |
-| `ImpChanged`        | `reason`, `imp`, `detail` for a timed change             | A change to an imp's record: its state, pid, leases or error.                                                                                                         |
-| `ImpRemoved`        | `imp`, as its record was last                            | `impz rm`: the VM, the disk and the checkpoints are gone.                                                                                                             |
+| `ImpChanged`        | `reason`, `imp`, `detail` for some reasons               | A change to an imp's record, such as its state, pid, leases or error, with a `reason` from the table below.                                                           |
+| `ImpRemoved`        | `imp`, as its record was last                            | The imp left this host, by `impz rm` or a move away: its VM, disk and checkpoints here are gone.                                                                      |
 | `CheckpointAdded`   | `name` (the imp's), `checkpoint`                         | A checkpoint.                                                                                                                                                         |
 | `CheckpointRemoved` | `name`, `checkpoint`                                     | A checkpoint deleted.                                                                                                                                                 |
 | `GovernorDecision`  | `decision`, `name`, `trigger`, `usedMib`, `budgetMib`, … | The RAM governor admitted or refused a boot or a wake, or slept an imp to make room.                                                                                  |
@@ -70,8 +74,8 @@ of the newest event at the time of the snapshot. A reader skips a kind or a fiel
 | `Reset`             | none                                                     | impd no longer holds the events after the reader's cursor; the snapshot follows.                                                                                      |
 | `Position`          | none                                                     | On a stream opened with a cursor: the stream has read the log through `seq`. It follows a snapshot after a `Reset`, and each read past events the reader may not see. |
 
-`imp` has the shape `impz ls --json` prints, so a reader keeps its own copy with no second call. An
-`ImpChanged` reason says why the record changed:
+`imp` has the shape `impz ls --json` prints, so a reader can keep its own copy with no second call.
+The `reason` of an `ImpChanged` event is one of these:
 
 | Reason     | Meaning                                                                                                                      |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -79,7 +83,7 @@ of the newest event at the time of the snapshot. A reader skips a kind or a fiel
 | `woke`     | A wake from a memory snapshot finished.                                                                                      |
 | `slept`    | The imp went to sleep: on request, idle, or for the governor (`detail.trigger`).                                             |
 | `stopped`  | The imp stopped, or a new imp is ready without a boot (a fork or a restore from backup).                                     |
-| `failed`   | A boot, wake or sleep failed; `imp.error` says why.                                                                          |
+| `failed`   | A boot, wake or sleep failed; `imp.error` holds the cause.                                                                   |
 | `repaired` | impd found the VM or the snapshot gone and corrected the record.                                                             |
 | `adopted`  | impd started and found the imp's VM still running.                                                                           |
 | `held`     | A hold was set or cleared, or a lease acquired or released (a renew emits nothing).                                          |
@@ -89,10 +93,10 @@ of the newest event at the time of the snapshot. A reader skips a kind or a fiel
 | `exposed`  | The imp became public or tailnet-only, or got a new credential.                                                              |
 | `released` | A forced sleep or stop ended the imp's leases; `detail.released` is how many.                                                |
 
-`detail` comes with `booted`, `woke`, `slept` and `restored`: `durationMs`, `steps` (milliseconds
-per step, as impd logs them), `trigger` and, for a boot, `coldBootReason`. `slept` also has
-`prepareMs`, the work before `durationMs` (disk room, a young guest's wait, the shrink): the sleep
-started at `at` less both.
+A timing `detail` comes with `booted`, `woke`, `slept` and `restored`: `durationMs`, `steps`
+(milliseconds per step, as impd logs them), `trigger` and, for a boot, `coldBootReason`. `slept`
+also has `prepareMs`, the work before `durationMs` (disk room, a young guest's wait, the shrink):
+the sleep started at `at` less both.
 
 An event's `imp.leases` is `{ leases: [], otherCount }`: the stream checks each event against the
 reader's imps, not its fields, so it carries no lease owners ([leases](./leases.md#owners)). A
@@ -101,16 +105,17 @@ reader's imps, not its fields, so it carries no lease owners ([leases](./leases.
 ### Guarantees
 
 - impd writes each event in the same database transaction as the change it describes, from the one
-  place that writes the imp or checkpoint row, so every change reaches the stream, including impd's
-  own repairs, and the log keeps the event of a commit even when impd stops right after it. A change
-  to an imp's last activity is not an event.
+  place that writes the imp or checkpoint row. So impd writes an event for every change to an imp's
+  record, its own repairs included, except a change to the last activity or a lease renew. The log
+  keeps the event of a commit even when impd stops right after it. An event that fails the schema is
+  still left out of the stream, as below.
 - Events leave in the order the writes landed.
 - The stream marks its place in the log before it reads the snapshot, so no change falls between the
   two. A change under way may come in the snapshot and again after it; each event carries the whole
   imp, so a repeat is harmless.
-- A slow reader gets every event at its own pace, however far behind it falls. impd keeps 7 days of
-  events, at most 100,000. When a stream falls behind the oldest event impd keeps, a stream opened
-  with a cursor gets `Reset` and the whole snapshot again. A stream opened without one ends, and a
+- A slow reader gets every event impd still keeps, at its own pace. impd keeps 7 days of events, at
+  most 100,000. When a stream falls behind the oldest event impd keeps, a stream opened with a
+  cursor gets `Reset` and the whole snapshot again. A stream opened without one ends, and a
   reconnect sends the snapshot.
 - `impz events` reconnects by itself after impd ends the stream, impd restarts or the network drops:
   after 1 s, then twice as long each time, at most 15 s. It gives up after five ends in a row; a
@@ -142,10 +147,11 @@ impd writes one row for each call that changes something: every procedure except
 each exec, console, attach and SSH session as it opens (`exec-agent` for `impz exec --agent`), each
 `impz proxy` tunnel as `tunnel:<port>`, and each reverse forward as `reverse:<path or port>`
 (`reverse:auto` for a socket the agent names). A row has the time, the procedure, the caller, the
-imp it named, the outcome (`ok` or the error code) and how long the call took. It never holds the
-call's input, so a secret's value never reaches it. An `images.add` from a registry also keeps, as
-its detail, the reference the pull resolved by digest (`busybox@sha256:…`), so an add of a moving
-tag such as `:latest` names the bytes it took.
+imp it named, the outcome (`ok` or the error code) and how long the call took. It has no column for
+the call's input, only the procedure name (which holds a tunnel's port or a forward's path), the
+imp's name and a short detail, so a secret's value never reaches it. An `images.add` from a registry
+also keeps, as its detail, the reference the pull resolved by digest (`busybox@sha256:…`), so the
+row of an add of a moving tag such as `:latest` records the bytes it took.
 
 ```sh
 impz audit --kind api          # every imp, newest first
@@ -161,13 +167,12 @@ impz audit box --kind api      # the calls that named box
 | `oauth`     | A call from an MCP client signed in through [impd's OAuth](./mcp.md#sign-in). |
 | `service`   | A call from a [service client](./mcp.md#service-clients) of the public route. |
 
-The `oauth` caller is a sign-in to impd. An `oauth` secret is another thing that shares the word: a
-refresh token the broker trades for access tokens to another service
-([oauth secrets](./connectors.md#oauth-secrets)).
+The `oauth` caller is a sign-in to impd. An `oauth` secret is unrelated: a refresh token the broker
+trades for access tokens to another service ([oauth secrets](./connectors.md#oauth-secrets)).
 
 impd writes the row after it answers, so the log never slows a call, and a failed write is logged.
-It keeps the newest 10,000 rows across all imps. A row names the imp by name with no link to it, so
-it outlives `impz rm`.
+It keeps the newest 10,000 rows across all imps. A row holds the imp's name with no link to the imp,
+so it outlives `impz rm`.
 
 The broker's log, `impz audit` with no `--kind` (or `--kind broker`), is a different table: the
 requests an imp sent with a credential ([connectors](./connectors.md)).

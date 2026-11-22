@@ -12,11 +12,16 @@ impz new --name job1 --image builder
 impz new --name job2 --image builder
 ```
 
+To get many imps that start from one prepared disk, set up the source imp, run
+`impz template create`, then create imps with `--image`, as above.
+
 `impz template` is a shortcut for the images API with an imp as the source. It has no routes of its
-own: `impz template create <imp> <name>` calls `images.add` with `{ imp, name }`, `impz template ls`
-lists the images whose `source` is `imp`, and `impz template rm` calls `images.delete`. A template
-is an image in every other way: `impz image ls` lists it, `impz new --image` takes it, and the RAM,
-disk and egress settings of a new imp come from the create call, not from the source imp.
+own. `impz template create <imp> <name>` calls `images.addStream` with `{ imp, name }`, or
+`images.add` on an impd without it ([long calls](./images.md#long-calls)). `impz template ls` lists
+the images whose `source` is `imp`, and `impz template rm` calls `images.delete`. A template is an
+image in every other way: `impz image ls` lists it, and `impz new --image` takes it. A new imp's RAM
+and egress settings come from the create call, not from the source imp. So does its disk size,
+within the floor under [Disk size](#disk-size).
 
 ## Making a template
 
@@ -30,19 +35,18 @@ impd copies the disk the same way as a checkpoint
 - A stopped imp is copied as it is.
 
 The copy is a reflink clone on XFS and a ZFS clone on ZFS, so a template costs no space until the
-source or the template's imps write to their disks. The source imp keeps running, and later changes
-to it do not change the template.
+source or the template's imps write to their disks. Later changes to the source imp do not change
+the template.
 
-`impz template create` with a name that is a template already makes the template again from the
-imp's disk now. The name then points at the new copy. Imps made before keep their own disks. The old
-copy is removed once no image names it. A template and a docker image never share a name: impd
-refuses `impz template create` over a docker image and `impz image add` over a template.
+Run `impz template create` with the name of an existing template to make that template again from
+the imp's disk as it is now. The name then points at the new copy. Imps made before keep their own
+disks. The old copy is removed once no image names it. A template and a docker image never share a
+name: impd refuses `impz template create` over a docker image and `impz image add` over a template.
 
 `impz template rm` refuses a template that an imp still uses, as `impz image rm` does for any image.
 
-`impz template create` reads `images.addStream` from an impd that has it, and shows how long the
-copy takes ([long calls](./images.md#long-calls)). A copy runs to its end when the client goes, and
-the template is made.
+With `images.addStream`, `impz template create` shows how long the copy takes. When the client goes
+away, the copy still runs to its end and impd makes the template.
 
 ## Disk size
 
@@ -73,7 +77,8 @@ Before any service starts, the agent then:
 
 The agent sets the hostname and `/etc/hosts` from the imp's name on every boot. impd clears the flag
 only when a boot reports `ok`, so a failed reset or a boot that fails runs the reset again on the
-next boot, and later boots keep the new identity. A restore from a backup carries the flag.
+next boot. After a boot reports `ok`, later boots keep the new identity. A restore from a backup
+carries the flag.
 
 A reset that fails on every boot, such as an `ssh-keygen` that ignores `-f` with `-A`, writes a new
 machine-id on each cold boot while the old host keys stay; impd logs each attempt.
@@ -91,15 +96,19 @@ from the source before you make the template, or reset them in a service at boot
 
 ## How a template is stored
 
+For the design, see [Template images](../architecture/storage/images.md#template-images) in the
+images architecture doc.
+
 A template is a row in the `images` table with `source` = `imp`. Its digest is `imp-<uuidv7>`, a
 name no docker image ID can have, so impd never runs docker for it. Its directory is
 `images/imp-<uuidv7>/` with `rootfs.ext4` (the clone) and `config.json` (the source image's docker
 config).
 
 On ZFS the template's dataset is a clone of the source's disk, and the template's imps are clones of
-the template's `@base`. Each one can go in any order: the source, the template or its imps. The
-[reclaim](../architecture/storage/storage.md#zfs) promotes the next clone and frees the blocks once
-the last user is gone.
+the template's `@base`. A clone does not pin its origin on disk: the source imp can be destroyed
+while the template lives, and the [reclaim](../architecture/storage/storage.md#zfs) promotes the
+next clone and frees the blocks once the last user is gone. Only `impz template rm` enforces an
+order: it refuses while an imp uses the template.
 
 [Backups](../architecture/storage/backups.md) carry every image, templates included. A restore
 brings back each imp's image before the imp. A restore of all imps also brings back every template,

@@ -20,10 +20,10 @@ placeholder.
    impz secret add claude --kind static --hosts api.anthropic.com --env CLAUDE_CODE_OAUTH_TOKEN
    ```
 
-   For an API key, run `impz secret add claude --preset anthropic` instead. Claude Code then asks
-   once, in its first interactive session, to use the key.
+   For an API key, run `impz secret add claude --preset anthropic` instead, and say yes when Claude
+   Code asks to use the key in its first interactive session.
 
-3. Store a GitHub token, pasted at the prompt: `impz secret add gh --preset github`.
+3. Store a GitHub token, and paste it at the prompt: `impz secret add gh --preset github`.
 
 4. Start an imp from the image, and grant it both secrets:
 

@@ -28,8 +28,8 @@ file but the end-to-end suites', which have [a preload of their own](#shared-tes
   `IMP_HOST_TESTS`, `IMP_TEST_SMALL_FS`, `IMP_TEST_ZFS_ROOT` and `IMP_TEST_ZFS_DIR`.
 - The [test network](../../../../packages/shared/src/test-utils/network.ts), a preload of its own,
   fails each request no handler answers, and resets the handlers after each test.
-- After each test, the kit's preload puts back every variable that `updateEnv` changed, at the value
-  it had before the test.
+- After each test, the `@zgeoff/testing` preload puts back every variable that `updateEnv` changed,
+  at the value it had before the test.
 
 To give impd a setting:
 
@@ -40,8 +40,8 @@ To give impd a setting:
 
 ## Shared test utils
 
-Look in [the shared test utils](../../../../packages/shared/src/test-utils/) for a helper that knows
-nothing about imp. Each package keeps its own stand-ins in its `src/test-utils/` folder.
+Look in [the shared test utils](../../../../packages/shared/src/test-utils/) for a helper that isn't
+specific to imp. Each package keeps its own stand-ins in its `src/test-utils/` folder.
 
 - Wait on a condition with `waitFor` from `@zgeoff/testing`.
 - Script a dependency's answers with
@@ -62,7 +62,7 @@ Dashboard component tests run the real client, `@impz/client`, against a real im
 `bunfig.toml` preloads the DOM, then the root preload, then
 [its own setup](../../../../packages/dashboard/test-setup.ts). That setup points the page at
 `IMPD_ORIGIN`, a made-up origin that `startDashboardImpd` routes to impd, and adds the
-`Sec-Fetch-Site` header that impd's same-origin check reads. A test never touches `IMPD_ORIGIN`.
+`Sec-Fetch-Site` header that impd's same-origin check reads. Never touch `IMPD_ORIGIN` in a test.
 
 To write a dashboard test:
 
@@ -108,9 +108,10 @@ onTestFinished(() => stack.disposeAsync());
 ```
 
 The stack releases last deferred, first released. When your resource must be released before the
-util's resource, defer your release into the stack after the util's call. An example is a step that
-the fake VMM, [`buildStubVmm`](../../../../packages/testing/src/stand-in/vm/build-stub-vmm.ts),
-still holds when impd stops.
+util's resource, defer your release into the stack after the util's call. Do this, for example, for
+a step that the fake VMM,
+[`buildStubVmm`](../../../../packages/testing/src/stand-in/vm/build-stub-vmm.ts), still holds when
+impd stops.
 
 ## What a daemon setupTest returns
 

@@ -1,23 +1,25 @@
 # Huge pages
 
-With huge pages on, impd backs each imp of fixed memory with the host's pool of huge pages, the
-large page size the CPU maps with one page table entry. A guest on huge pages takes fewer page
-faults and fewer TLB misses, so a template restore reaches a running agent sooner. Restore and wake
-run through a page handler: a small process per imp that serves each page of the snapshot as the
-guest first touches it. The owner turns huge pages on for the whole host, and off is the default. An
-elastic imp always runs on the host's ordinary pages, because a shrink exists to return memory to
-the host, and a pool page goes back only to the pool ([elastic memory](./elastic-memory.md)).
+Huge pages are the large page size the CPU maps with one page table entry. With huge pages on, each
+cold boot of an imp of fixed memory whose memory is a whole number of huge pages runs on the host's
+pool of huge pages. A wake keeps the pages its snapshot was made on. With the setting off, it wakes
+on ordinary pages. A guest on huge pages takes fewer page faults and fewer TLB misses, so a template
+restore reaches a running agent sooner. A restore or wake on huge pages runs through a page handler:
+a small process per imp that serves each page of the snapshot as the guest first touches it. The
+owner turns huge pages on for the whole host, and they are off by default. An elastic imp always
+runs on the host's ordinary pages, because a shrink exists to return memory to the host, and a pool
+page goes back only to the pool ([elastic memory](./elastic-memory.md)).
 
 The pool is memory the host reserves for huge pages at boot or through `vm.nr_hugepages`, and no
-other process can use it. impd only reads the pool's size; the host's own config sets it, as
-[the configuration guide](../../guides/configuration.md#huge-pages) describes.
+other process can use it. Set the pool's size in the host's own config
+([the configuration guide](../../guides/configuration.md#huge-pages)); impd only reads it.
 
 ## Which imps run on huge pages
 
 impd decides at each cold boot. With huge pages on, an imp of fixed memory whose memory is a whole
 number of huge pages boots on them; any other imp boots on ordinary pages. impd records the choice
 in the imp's VM identity and in each snapshot it takes, because a wake back onto huge pages needs a
-page handler, which a snapshot on ordinary pages never starts.
+page handler, and a wake from a snapshot on ordinary pages starts none.
 
 A boot template carries the choice in its key, so an imp on huge pages restores only a template
 built on huge pages ([boot templates](./boot-templates.md#the-key)). A template on ordinary pages
@@ -35,8 +37,8 @@ impd starts one handler per restore or wake, before Firecracker loads the snapsh
 
 1. impd opens the snapshot's memory file, makes a zeroed stats file in the imp's run directory, and
    starts the handler with both files as inherited descriptors, inside the imp's cgroup.
-2. The handler binds its socket in the imp's run directory, which the jail binds in, owned by the
-   jail's user, and drops its own privileges to that user.
+2. The handler binds its socket in the imp's run directory, which the jail binds in. The jail's user
+   owns the socket, and the handler drops its own privileges to that user.
 3. Firecracker connects at the load, sends the guest's memory regions and the UFFD descriptor, and
    the handler checks the peer's process through the socket's credentials.
 4. On each fault, the handler copies the page the guest touched from the memory file into the guest,
@@ -102,10 +104,10 @@ guest holds. A full snapshot would read every page the guest never touched throu
 take a pool page for each.
 
 The diff goes over a base that holds the rest of the memory. For a woken or restored imp, the base
-is a copy of the file its handler serves, read through the handler's descriptor; a copy that fails
-falls back to a full snapshot. A cold-booted imp has no handler, and its untouched memory is zero,
-so the diff goes over an empty file. impd refuses to sleep an imp whose handler record is there but
-whose handler is gone, because the diff would then miss the pages that handler served.
+is a copy of the file its handler serves, read through the handler's descriptor. When the copy
+fails, impd takes a full snapshot. A cold-booted imp has no handler, and its untouched memory is
+zero, so the diff goes over an empty file. impd refuses to sleep an imp whose handler record is
+there but whose handler is gone, because the diff would then miss the pages that handler served.
 
 A template build on huge pages snapshots the same way, as a diff into an empty file.
 
@@ -125,10 +127,10 @@ writes the file into the ARC, ZFS's own cache, and leaves none of it in the page
 3. For a file within the cap, impd runs `uffd-handler --warm <memory file>`, which reads each data
    block through a map of the file, as a wake's handler reads it.
 
-A wake, a stop or a destroy of the imp ends its warm first. impd's own stop ends every warm and
-starts none after it. impd runs at most two warms at once, and a third waits for one of them to end.
-The kernel can take back the page cache that a warm filled, because nothing locks it, and a wake
-after that reads cold.
+A wake, a stop or a destroy of the imp ends its warm first. When impd itself stops, it ends every
+warm and starts no new one. impd runs at most two warms at once, and a third waits for one of them
+to end. The kernel can take back the page cache that a warm filled, because nothing locks it, and a
+wake after that reads cold.
 
 impd logs the outcome of each warm in the journal, on a line with the imp's name:
 
@@ -153,14 +155,14 @@ and the new guest's whole memory. It sleeps no imp to make pool room, because th
 sleep may hold no pool pages.
 
 The host reserves the pool out of the RAM the budget counts, and a guest on ordinary pages can never
-take a pool page. On a host with a pool, the governor therefore holds a second line: the ordinary
+take a pool page. On a host with a pool, the governor therefore keeps a second budget: the ordinary
 budget, which is the budget less the whole pool. It counts every guest on ordinary pages, the locked
 pages and the KSM headroom against the ordinary budget, and for a guest on huge pages only what it
 holds beside its pool pages. A boot, wake or grow on ordinary pages must fit both budgets, and
-enforcement sleeps imps while either one is over. A refusal that the ordinary budget makes names
-that budget and its numbers. To make room under the ordinary budget, the governor counts what each
-imp holds outside the pool, so it never counts a guest's pool pages as room that its sleep frees
-there.
+enforcement sleeps imps while either one is over. When the ordinary budget refuses a request, the
+governor names that budget and its numbers in the refusal. To make room under the ordinary budget,
+the governor counts what each imp holds outside the pool, so it never counts a guest's pool pages as
+room that its sleep frees there.
 
 A sleeping imp of fixed memory whose snapshot is on ordinary pages, such as one that slept before
 the host turned huge pages on, wakes on ordinary pages. When the ordinary budget refuses that wake,

@@ -1,14 +1,13 @@
 # api-lifecycle
 
-Run this journey on the `local` target. Before it, run `bun verify use --target local`,
+Run this journey on the `local` target to check that an operator can create an imp, list it, put it
+to sleep and destroy it through impd's API. Before it, run `bun verify use --target local`,
 `bun verify up` and `bun verify doctor`.
 
-The journey checks that an operator can create an imp, list it, put it to sleep and destroy it
-through impd's API. `bun verify up` also starts `impz events`, the CLI's event feed, and records
-what it prints. `bun verify imp-events` reads that record, from the point that `use --feature`
-marks.
+`bun verify up` also starts `impz events`, the CLI's event feed, and records what it prints.
+`bun verify imp-events` reads that record, from the point that `use --feature` marks.
 
-The journey's imp is `wv-api`. When a step gives a result that the end state doesn't expect, skip to
+The journey's imp is `wv-api`. When a step's result differs from the End state below, skip to
 `destroy-imp`, so the next run starts with no `wv-api`. `destroy-imp` exits 0 when the imp is
 already gone, so you may also run it before `use --feature` to clear a leftover.
 

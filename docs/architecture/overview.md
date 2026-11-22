@@ -3,10 +3,11 @@
 An imp is a persistent Linux microVM that sleeps when it is idle and wakes on the next request to
 it. A sleeping imp holds no RAM: its memory is a snapshot on disk, and a wake loads it back with
 every process where it was. Its disk is a copy-on-write clone, so a checkpoint, a restore or a fork
-costs no copy. One host runs every imp, and one daemon, impd, owns them all. impd keeps every awake
-imp under a RAM budget the owner sets, and sleeps the least recently active ones to make room. The
-host joins a Tailscale tailnet that the owner runs, and other machines reach impd through that
-tailnet. One exception: an imp the owner makes public takes requests from the internet.
+costs no copy. Each host runs its own imps, and one daemon on it, impd, owns them all. impd keeps
+every awake imp under a RAM budget the owner sets, and sleeps the least recently active ones to make
+room. The host joins a Tailscale tailnet that the owner runs, and other machines reach impd through
+that tailnet. The one exception is an imp the owner makes public, which takes requests from the
+internet.
 
 The code is one Bun workspace and the Go modules of the guest agent and the host's ksm-exec,
 oci-fetch and uffd-handler. impd is `packages/daemon`. Its typed contract, `packages/api`, is shared
@@ -19,7 +20,7 @@ agent. The guest agent is `agent/`.
 
 With `packages/durable`, a program on SQLite records its changes in an event log that numbers each
 one, runs operations that resume or undo their steps after a restart, and runs reconcilers that
-check the system on a timer. [Durable work](./durable-work.md) explains all three. The package opens
+check the system on a timer. For all three, see [Durable work](./durable-work.md). The package opens
 no transaction of its own. A program passes the transaction of a change to the event append, so the
 change and its event commit together; an append on a plain connection commits on its own. The
 package never refers to an imp concept, so a program other than impd can use it. Its event log is a
@@ -83,9 +84,9 @@ The host under impz is thin: it gives KVM, cgroup v2, Podman and a filesystem fo
 one container from impz's image ([the host](./host.md)). The imp-host container holds impd, every
 Firecracker process and the tailnet node, in a network namespace of its own, so the taps, routes and
 firewall rules for the imps never touch the host's network. A small entrypoint sets up the cgroups,
-the storage, the network and Tailscale, then runs impd under a supervisor that restarts it. impd
-fetches the builder image that every image pull and build runs in from its registry, and the
-container gets no Docker socket.
+the storage, the network and Tailscale, then runs impd under a supervisor that restarts it. Every
+image pull and build runs in a builder image that impd fetches from its registry, and the container
+gets no Docker socket.
 
 impd is one Bun process. It starts one Firecracker microVM per awake imp, detached from itself, so
 an impd restart leaves every VM running and the next impd adopts them. Each Firecracker runs under
@@ -93,9 +94,9 @@ its jailer as the imp's own uid, in its own chroot and cgroup ([isolation](./iso
 boots a kernel impz builds, from a read-only system drive that holds the agent, so any OCI image
 boots with nothing of impz in it.
 
-Reach comes from the tailnet. The host publishes impd's ports on its loopback only, and tailnet
-traffic arrives inside the container's namespace through its own tailscaled. Nothing on the host
-needs an inbound port, and a public imp is the one opt-in exception
+Other machines reach impd through the tailnet. The host publishes impd's ports on its loopback only,
+and tailnet traffic arrives inside the container's namespace through its own tailscaled. Nothing on
+the host needs an inbound port, and a public imp is the one opt-in exception
 ([ingress](./network/ingress.md)).
 
 ## The data
@@ -117,9 +118,10 @@ All of impd's state lives in one data directory.
   host key and the TLS certificate, each a file only root reads. No backup holds them
   ([backups](./storage/backups.md)).
 
-The disk is the truth about an imp, and a memory snapshot only ever wakes on the disk it was made
-with. Anything that changes the disk behind a snapshot, such as a restore, drops the snapshot first,
-and the imp boots cold.
+The disk is the truth about an imp, and an imp's memory snapshot only ever wakes on the disk it was
+made with. Anything that changes the disk behind a snapshot, such as a restore, drops the snapshot
+first, and the imp boots cold. A boot template is not an imp's snapshot: its parked guest runs
+nothing from a user disk, and its restore swaps in the new imp's disk before the guest goes on.
 
 ## Cross-cutting rules
 
@@ -127,9 +129,9 @@ and the imp boots cold.
   background job only tries it. The locks live in impd's memory, and a restart rebuilds what they
   guarded from the database and the processes it finds
   ([the lifecycle](./lifecycle/lifecycle.md#recovery-after-a-restart)).
-- **Two budgets.** The RAM governor admits every boot, wake and memory grow, and sleeps imps to make
-  room ([the RAM governor](./lifecycle/ram-governor.md)). The disk budget holds back a reserve of
-  free space that no write may take ([disk space](./storage/disk-space.md)).
+- **RAM and disk budgets.** The RAM governor admits every boot, wake and memory grow, and sleeps
+  imps to make room ([the RAM governor](./lifecycle/ram-governor.md)). The disk budget holds back a
+  reserve of free space that no write may take ([disk space](./storage/disk-space.md)).
 - **The guest is not trusted.** impd checks everything an agent reports before it uses it, a guest
   reaches the host container only on the broker's and the resolver's ports, and a jailed VM can
   touch no files but its own ([isolation](./isolation.md)).
@@ -141,10 +143,10 @@ and the imp boots cold.
   the published client, the MCP server, and the three apps (the CLI, the dashboard and impd) on top.
   `packages/durable` sits on the leaves, beside the contract: of the workspace packages it imports
   only `packages/shared`. oxlint refuses an import that points up the stack or across to another
-  app, type-only imports included, so the order cannot drift. It also refuses a Node import in the
-  contract or the client, because the client runs in browsers and in Node alike; a query builder
-  outside the daemon's database module and `packages/durable`; and production code that imports test
-  support.
+  app, type-only imports included, so the order cannot drift. It also refuses a query builder
+  outside the daemon's database module and `packages/durable`, production code that imports test
+  support, and a Node import in the contract or the client, because the client runs in browsers and
+  in Node alike.
 - **One impd per host, permanently.** impd keeps one database connection and every imp's lock in its
   own memory, so a second impd on the same data would break both, and impd has no standby or
   failover. That rules out high availability on purpose. impd scales out instead: each host is its

@@ -30,27 +30,31 @@ metadata:
 
 ## Departures
 
-- Run the VM and ZFS journeys through [`test-e2e.sh`](../../../scripts/test-e2e.sh) and
-  [`zfs-host-test.sh`](../../../scripts/zfs-host-test.sh), never `rig e2e` or `rig zfs`, in place of
-  the rig run in the testing skill's
+- Never run journeys with `rig e2e` or `rig zfs`, the rig run in the testing skill's
   [Where each test runs](../testing/references/slow-tests.md#where-each-test-runs) section. A
   journey is one test file under `packages/daemon/e2e/`, and it drives a dev instance: a running
-  impd and its VMs. rig starts no dev instance. Each harness starts its own. To run one journey by
-  hand, start a dev instance with `scripts/dev/dev.sh up` first.
+  impd and its VMs. rig starts no dev instance. Run a suite through
+  [`test-e2e.sh`](../../../scripts/test-e2e.sh) or
+  [`zfs-host-test.sh`](../../../scripts/zfs-host-test.sh). `test-e2e.sh` brings up this checkout's
+  dev instance through [`dev.sh`](../../../scripts/dev/dev.sh) and leaves it running, with or
+  without `--keep`. `--keep` also leaves the run's imps in place. To run one journey alone, run its
+  suite once with `scripts/test-e2e.sh --only <suite>`, then run the One end-to-end journey command
+  in the table below on the instance it left.
 - Keep each `test()` in a journey under 60 s, in place of the 15 s of the e2e lane in
   [Where each test runs](../testing/references/slow-tests.md#where-each-test-runs). A journey drives
-  a real VM. `rig.config.ts` declares the `e2e` and `zfs` lanes only to hold the 60 s, which
+  a real VM. The `e2e` and `zfs` lanes in `rig.config.ts` exist only to hold the 60 s, which
   `zgeoff/max-test-timeout` reads.
 
 ## Commands and what they need
 
 Each lane but `e2e` and `zfs` runs through its `test:<lane>` script in the root
-[`package.json`](../../../package.json), which calls `rig <lane>`. A lane's files carry its suffix,
-such as `.host.test.ts`. Pull no image in a headscale or pebble test: those lanes' start hook pulls
-them before the first test.
+[`package.json`](../../../package.json), which calls `rig <lane>`; `test:dashboard` runs the
+dashboard package's own tests instead. End each file name of a lane with its suffix, such as
+`.host.test.ts`. Pull no image in a headscale or pebble test: the start hook of those lanes pulls
+the images before the first test.
 
-Run a command only where its needs are met. When this host lacks them, push your branch, and read
-the result of the row's CI job: `eval` and `vm` are in
+Run a command only on a host that has everything in its Needs column. Otherwise, push your branch,
+and read the result of the row's CI job: `eval` and `vm` are in
 [`nix.yml`](../../../.github/workflows/nix.yml), the others in
 [`ci.yml`](../../../.github/workflows/ci.yml). CI runs no single journey: for that row, read the
 `e2e-group` job that runs the journey's suite. A suite outside every group never runs in CI, as
@@ -70,7 +74,7 @@ the result of the row's CI job: `eval` and `vm` are in
 | Docker build lane       | `bun run test:docker`                                                                  | Docker with buildx                                           | `checks-lanes` |
 | Small filesystem lane   | `IMP_TEST_SMALL_FS=<dir> bun run test:small-fs`                                        | a 4 GiB loop-mounted XFS at `<dir>`; a tiny tmpfs fails      | `checks-lanes` |
 | VM end to end lane      | `scripts/test-e2e.sh [--only <suites> \| --group <1-4>] [--clean \| --reuse] [--keep]` | KVM, Docker; `--help` lists the suites and their needs       | `e2e-group`    |
-| One end-to-end journey  | `bun test --config=packages/daemon/e2e/bunfig.toml ./packages/daemon/e2e/<file>`       | a dev instance from `scripts/dev/dev.sh up`                  | none           |
+| One end-to-end journey  | `bun test --config=packages/daemon/e2e/bunfig.toml ./packages/daemon/e2e/<file>`       | the dev instance a `test-e2e.sh --only <suite>` run left up  | none           |
 | NixOS module evaluation | `nix build -L --no-link .#checks.x86_64-linux.eval`                                    | Nix with flakes                                              | `eval`         |
 | NixOS VMs               | `nix build -L --no-link .#checks.x86_64-linux.vm`                                      | Nix with the `kvm` and `nixos-test` system features          | `vm`           |
 | ZFS on a real pool      | `sudo env "PATH=$PATH" scripts/test-zfs.sh`                                            | root, the zfs module, `zpool`                                | `zfs-shard`    |
@@ -85,8 +89,9 @@ the result of the row's CI job: `eval` and `vm` are in
   `@impz/daemon` and `@impz/testing` dev dependencies of `@impz/client` and `@impz/mcp`, so neither
   published build depends on impd.
 - Put a test of the end-to-end or bootstrap harness in
-  [`packages/e2e-harness/`](../../../packages/e2e-harness/). It runs in the unit run, with no KVM.
-  Keep [`packages/daemon/e2e/`](../../../packages/daemon/e2e/) for the journeys and their fixtures.
+  [`packages/e2e-harness/`](../../../packages/e2e-harness/). Such a test runs in the unit run, with
+  no KVM. Keep [`packages/daemon/e2e/`](../../../packages/daemon/e2e/) for the journeys and their
+  fixtures.
 - Name a journey file by the rule at the top of the [End to end reference](./references/e2e.md).
 - Test a guest's disk contents in a journey. A test impd runs no guest, and its imp disks start
   empty.
@@ -100,9 +105,9 @@ the result of the row's CI job: `eval` and `vm` are in
   `IMP_TEST_ZFS_DIR` are set, and the small-filesystem tests to skip until `IMP_TEST_SMALL_FS` is.
   [`test-zfs.sh`](../../../scripts/test-zfs.sh) sets the two ZFS variables for its pool.
 - Skip a host networking test with `test.skipIf(!probeUnshare([...]))`, from
-  [`probe-unshare.ts`](../../../packages/daemon/src/test-utils/host-net/probe-unshare.ts). It skips
-  where the test can't make a network namespace, such as without root. `IMP_HOST_TESTS=required`,
-  which CI sets, turns that skip into a failure.
+  [`probe-unshare.ts`](../../../packages/daemon/src/test-utils/host-net/probe-unshare.ts). The test
+  then skips where it can't make a network namespace, such as without root.
+  `IMP_HOST_TESTS=required`, which CI sets, turns that skip into a failure.
 - When you add a lane, declare it in `rig.config.ts` with its limit, its suffix when it differs from
   `.<lane>`, and a start hook when its system needs one. Add a `test:<lane>` script that runs
   `rig <lane>`, and add it to a CI job by the rules of the `project-ci-design` skill.
@@ -113,15 +118,15 @@ the result of the row's CI job: `eval` and `vm` are in
 
 - Set an `IMP_*` variable, which impd reads as a setting, with `updateEnv` from `@zgeoff/testing`
   before `setupTest()`. The [root preload](../../../packages/shared/src/test-utils/preload.ts)
-  deletes every `IMP_*` variable the shell passed.
-- Expect the root preload to keep the variables that run a lane's tests or turn their skip into a
-  failure:
+  deletes each `IMP_*` variable the shell passed, except the four that run a lane's tests or turn
+  their skip into a failure:
   - `IMP_HOST_TESTS`;
   - `IMP_TEST_SMALL_FS`;
   - `IMP_TEST_ZFS_ROOT` and `IMP_TEST_ZFS_DIR`.
-- Expect every child process to inherit `NO_PROXY=*` from the root preload. It keeps Bun's `fetch`
-  from sending a loopback request through the shell's `HTTPS_PROXY`. To send a child's requests
-  through a proxy, clear `NO_PROXY` in that child's environment, or pass curl `--noproxy ''`.
+- Expect every child process to inherit `NO_PROXY=*` from the root preload. That setting keeps Bun's
+  `fetch` from sending a loopback request through the shell's `HTTPS_PROXY`. To send a child's
+  requests through a proxy, clear `NO_PROXY` in that child's environment, or pass curl
+  `--noproxy ''`.
 - When state leaks from one test into the next, add its reset to the `afterEach` in the
   [root preload](../../../packages/shared/src/test-utils/preload.ts).
 - Repeat a failing order with the `--seed=<n>` that the run prints. The root `bunfig.toml` runs
@@ -129,12 +134,14 @@ the result of the row's CI job: `eval` and `vm` are in
 
 ## Boundaries
 
-- Start a stand-in server, a local test server in place of the remote one, for a request that MSW
-  (Mock Service Worker) never sees. Read why for each case in
-  [Kinds of stand-in](./references/stand-ins.md#kinds-of-stand-in):
+- Start a stand-in server, a local test server in place of the remote one, for each of these
+  requests, which MSW (Mock Service Worker) never sees:
   - a `fetch` to loopback or to a unix socket;
   - a request from a `node:http` client;
   - a WebSocket.
+
+  Read why for each in [Kinds of stand-in](./references/stand-ins.md#kinds-of-stand-in).
+
 - Look for a stand-in in [Stand-ins](./references/stand-ins.md) before you write one.
 - Boot a real impd with
   [`startTestImpd`](../../../packages/testing/src/stand-in/start-test-impd.ts), which runs

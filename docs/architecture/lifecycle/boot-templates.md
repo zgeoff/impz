@@ -2,10 +2,11 @@
 
 A cold boot spends most of its time in the guest kernel's boot before the agent answers. A boot
 template skips that: impd boots one guest per shape, parks its agent before it touches any user
-disk, and snapshots it. Each later cold boot of that shape restores the snapshot, and the agent
-takes the imp's own values from a `claim`. The owner can turn templates off. A boot template is
-unrelated to a template image, which is an image made from an imp's disk
-([images](../storage/images.md#template-images)).
+disk, and snapshots it. A later cold boot of that shape restores the snapshot while the template is
+there, and the agent takes the imp's own values from a `claim`. The cold boot boots the kernel
+instead when the imp is elastic, when the template was evicted or turned off after failures, or when
+the owner turned templates off. A boot template is unrelated to a template image, which is an image
+made from an imp's disk ([images](../storage/images.md#template-images)).
 
 ## The key
 
@@ -26,8 +27,8 @@ A shape's first cold boot boots the kernel. Its second starts the template's bui
 background, so no create waits for it, and a shape booted once costs nothing. Builds run one at a
 time, because they share one tap.
 
-1. The build holds disk room for the whole memory, and is admitted by the governor into free room
-   only, so it never sleeps an imp ([the RAM governor](./ram-governor.md#admission)).
+1. The build holds disk room for the whole memory. The governor admits it only into free room, so it
+   never sleeps an imp ([the RAM governor](./ram-governor.md#admission)).
 2. impd boots a VM with nothing on its command line that names an imp, and a small placeholder disk
    at a path every template shares, since a snapshot records its drive's path.
 3. The agent mounts its own filesystems, makes the inner container's cgroup, reads its own binary
@@ -45,9 +46,9 @@ lives on until its last VM exits.
 
 ## Restore
 
-When the shape has a template, a cold boot starts Firecracker in the imp's cgroup and jail, loads
-the template's snapshot paused with the imp's tap and vsock socket in place of the template's, seals
-the jail and resumes. A template on huge pages loads through a page handler that serves the
+When the shape has a template, impd starts Firecracker in the imp's cgroup and jail, loads the
+template's snapshot paused with the imp's tap and vsock socket in place of the template's, seals the
+jail and resumes the VM. A template on huge pages loads through a page handler that serves the
 template's memory file ([huge pages](./huge-pages.md#the-page-handler)). Meanwhile impd readies the
 imp's disk. Once the parked agent answers and the disk is ready, impd points the guest's root drive
 at the imp's disk, which also tells the guest its new size, and sends `claim`.
@@ -58,11 +59,12 @@ credits the seed to the entropy pool and reseeds the kernel's random generator a
 MAC, waits for the disk to report the claimed size, and goes on as a cold boot does, in the same
 process. It never reads the kernel command line again, since a restored guest's is the template's.
 
-From there the imp is an ordinary cold-booted imp. A failure in the template's own steps, the load,
-the resume or the parked ping, removes that build of the template and boots the kernel; the next
-misses build it again. A failure from the claim on is the imp's own, and the template stays. Failed
-builds and failed restores back off, and a key that keeps failing is turned off until impd restarts.
-A small number of templates is kept, and past it the least recently restored one goes.
+From there the imp is an ordinary cold-booted imp. When the load, the resume or the parked ping
+fails, impd removes that build of the template and boots the kernel, and a later cold boot of the
+shape builds it again. A failure from the claim on is the imp's own, and the template stays. impd
+backs off after failed builds and failed restores, and turns off a key that keeps failing until it
+restarts. It keeps a small number of templates, and past that it evicts the least recently restored
+one.
 
 To see what slowed a restore, read its `restored boot template` line in the host's journal. The line
 holds impd's steps, then the guest's steps after `; guest`, then the host stall after
@@ -92,12 +94,12 @@ every kept template at start. The build digs holes where the guest's memory was 
 skips the holes, so it holds only the pages that a boot left non-zero.
 
 The governor counts locked template pages as used RAM from the moment the lock starts to read them
-in, because no sleep frees them. The locks keep to a tenth of the RAM budget, so on a small host
-they leave the imps room to boot and grow, and a template whose lock would pass that share stays
-unlocked. impd releases a template's lock when it removes the template, and a lock that finishes
-after a rebuild of its template releases itself. A lock that fails, such as over the container's
-locked-memory limit, leaves the template unlocked and logged, and its restores still work at the
-speed of whatever the host still caches.
+in, because no sleep frees them. impd keeps the locks to a tenth of the RAM budget, so on a small
+host they leave the imps room to boot and grow. It leaves a template unlocked when its lock would
+pass that share. impd releases a template's lock when it removes the template, and a lock that
+finishes after a rebuild of its template releases itself. A lock that fails, such as over the
+container's locked-memory limit, leaves the template unlocked and logged, and its restores still
+work at the speed of whatever the host still caches.
 
 ## Accepted risks
 

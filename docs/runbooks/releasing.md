@@ -1,10 +1,13 @@
 # Releasing
 
+When you look after impz's releases and a step falls outside what the workflows do, find the section
+for your case, such as a release that fails to tag or a breaking change, and follow its steps.
+
 Releases come from `main` through [release-please](https://github.com/googleapis/release-please) and
 two workflows. A `feat:` or `fix:` commit on `main` makes the `release` job in CI open or update the
 release PR, which bumps every version, the changelog and the lock file. The `release` job calls the
-shared release-please workflow of `zgeoff/tools` at the commit that repo-sync pins. It merges the
-release PR once every check on the PR passes, and a draft release PR or one labelled
+shared release-please workflow of `zgeoff/tools` at the commit that repo-sync pins. The job merges
+the release PR once every check on the PR passes, and a draft release PR or one labelled
 `autorelease: hold` stays open. The run that merges the release PR tags `vX.Y.Z`, and CI then starts
 the release workflow for the tag, which builds the CLI, the guest kernel, the system drive, the host
 image, the base image, the npm packages and the Homebrew formula, smoke-tests each, and publishes
@@ -57,17 +60,17 @@ rules:
   changed type, a looser bound, or a variant of a tagged union that impd stops sending breaks a
   client. A new field, a new value of an enum, and a new variant of a tagged union do not, because a
   client passes over what it does not know. The union's tag is its discriminator: the property each
-  variant fixes to its own value, such as `type`. The client passes over an unknown event kind from
-  the release that added `Position` on. An older client fails on one, so impd sends a new kind to it
-  only behind an input it could not have sent, such as the event stream's cursor.
+  variant fixes to its own value, such as `type`. A client passes over an unknown event kind only
+  from the release that added `Position` on. An older client fails on one, so impd sends a new kind
+  to it only behind an input it could not have sent, such as the event stream's cursor.
 - A removed procedure, message, error code or constant, a changed error status, and a procedure that
   changes between one answer and an event stream all break a client.
 
-The check compares the protocol rather than the client's TypeScript declarations because the outcome
-to protect is a client that can still talk to impd. A type diff would flag a renamed export that
-breaks no request, and it would miss a tighter bound, which a TypeScript type does not show. The
-check cannot see a zod refinement, or what a transform in an output returns, because JSON Schema
-cannot express either.
+The check compares the protocol because the outcome to protect is a client that can still talk to
+impd. A diff of the client's TypeScript declarations would flag a renamed export that breaks no
+request, and it would miss a tighter bound, which a TypeScript type does not show. The check cannot
+see a zod refinement, or what a transform in an output returns, because JSON Schema cannot express
+either.
 
 The same check guards the `--json` output that other programs read from the CLI, which
 `packages/cli/json-output-schema.json` holds as JSON Schema per command. `bun run render:protocol`
@@ -77,15 +80,15 @@ because a script reads a field by its name. [JSON output](../guides/cli.md#json-
 a reader can rely on.
 
 To mark a change, put a `!` after the type, as in `feat(#412)!: drop imps.get`, or add a
-`BREAKING CHANGE: <what breaks>` footer to a commit message. The repository squash-merges, and
-GitHub takes the subject of a pull request with one commit from that commit, so the `!` goes in the
-commit's subject there and in the PR title when the pull request has several commits. A
+`BREAKING CHANGE: <what breaks>` footer to a commit message. The repository squash-merges. For a
+pull request with one commit, GitHub takes the squash commit's subject from that commit, so put the
+`!` in the commit's subject. For a pull request with several commits, put it in the PR title. A
 `BEGIN_COMMIT_OVERRIDE` block in the PR body replaces the message release-please reads. Editing the
 title or the body runs the check again.
 
 ## Set up a repository for releases
 
-These steps are done for `zgeoff/impz`. They are here for a new repository, or to set one up again.
+`zgeoff/impz` has had these steps done. Follow them for a new repository, or to set one up again.
 
 1. **The release App.** Events from `GITHUB_TOKEN` start no workflows, so a release PR opened with
    it would get no CI run, and the `release` job is skipped until an App is configured. Create a
@@ -97,10 +100,10 @@ These steps are done for `zgeoff/impz`. They are here for a new repository, or t
    public in its package settings, so a server pulls it without a login, and link `imp-base` to the
    repository.
 3. **The Homebrew tap.** Add the Actions variable `HOMEBREW_TAP` = `homebrew-tap`: the repository
-   name, not the full slug. Without it, or without the App, the `tap` job is skipped and every other
-   job still runs.
-4. **npm.** Trusted publishing can only be set up for a package that exists, so a new package's
-   first publish is by hand, from a machine logged in with `npm login`:
+   name, not the full slug. Without it, or without the App, the release workflow skips its `tap` job
+   and still runs its other jobs.
+4. **npm.** Trusted publishing can only be set up for a package that exists, so publish a new
+   package the first time by hand, from a machine logged in with `npm login`:
 
    ```sh
    tarball=$(scripts/release/pack-client.sh)
@@ -112,7 +115,7 @@ These steps are done for `zgeoff/impz`. They are here for a new repository, or t
    variable `NPM_PUBLISH_ENABLED` to `true`. From then on each release publishes with OIDC, and no
    npm token lives in CI.
 
-   `@impz/testing` takes the same steps, with its own variable. Its check installs the client
+   Take the same steps for `@impz/testing`, with its own variable. Its check installs the client
    tarball of the same release beside it:
 
    ```sh
@@ -127,8 +130,8 @@ These steps are done for `zgeoff/impz`. They are here for a new repository, or t
 
 ## Dry run
 
-A run of the release workflow with no tag builds and checks everything for the current `main` as a
-release would, and publishes nothing to a release:
+To build and check everything for the current `main` as a release would, without publishing a
+release, run the release workflow with no tag:
 
 ```sh
 gh workflow run release.yml
@@ -179,6 +182,6 @@ gh attestation verify oci://ghcr.io/zgeoff/imp-base:X.Y.Z -R zgeoff/impz
 ```
 
 The workflow never deletes, re-pushes or attests such a tag. Consumers that pinned an earlier digest
-are not affected, and the next release publishes its own tag. Deleting the package version is the
-owner's decision. The same holds when a run pushes the image and then fails at its own attest step.
-When the verify failed only for a transient reason, such as an API error, a republish passes.
+are not affected, and the next release publishes its own tag. Leave deleting the package version to
+the owner. The same holds when a run pushes the image and then fails at its own attest step. When
+the verify failed only for a transient reason, such as an API error, republish.

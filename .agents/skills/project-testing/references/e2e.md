@@ -3,23 +3,25 @@
 A journey is one file in [`packages/daemon/e2e/`](../../../../packages/daemon/e2e/), named
 `<kind>-<journey>.test.ts`, where `<kind>` is one of the testing skill's e2e prefixes, such as
 `journey` or `enforce`. The harness runs it as its own `bun test` process against one
-[dev instance](../../../../scripts/dev/dev.sh). A suite in
-[`suites.ts`](../../../../packages/e2e-harness/src/suites.ts) lists the journey's name in its
-`journeys`, and the harness finds the file by the name after `<kind>-`. The
-[development runbook](../../../../docs/runbooks/development.md#end-to-end-tests) owns how to run the
-harness, [`scripts/test-e2e.sh`](../../../../scripts/test-e2e.sh), and its flags.
+[dev instance](../../../../scripts/dev/dev.sh). Add the journey's name to the `journeys` of a suite
+in [`suites.ts`](../../../../packages/e2e-harness/src/suites.ts); the harness finds the file by the
+name after `<kind>-`. For how to run the harness,
+[`scripts/test-e2e.sh`](../../../../scripts/test-e2e.sh), and what its flags do, read the
+[development runbook](../../../../docs/runbooks/development.md#end-to-end-tests).
 
-The traps:
+Watch for these traps:
 
 - Start the name of everything the journey makes with the suite's name prefix, its `prefix` field.
   The [baseline reset](#the-baseline-reset) removes only the imps, networks and other records that
   carry it.
 - When a journey changes impd's settings, put them back in the journey. The next journey runs on the
   same instance.
-- Before you run a journey alone, run its suite once through `scripts/test-e2e.sh --only <suite>`. A
-  journey you run alone gets no reset before it and no fixture image build.
+- Before you run a journey alone, run its suite once through `scripts/test-e2e.sh --only <suite>`.
+  That run builds the fixture images and leaves this checkout's dev instance running. The lone
+  journey then runs on that instance, with no reset before it and no fixture image build of its own.
 - A burst of connections, a long socket path or an exec during an idle wait each fail a journey in a
-  way that looks like an impd bug. [Guest and host facts](#guest-and-host-facts) gives the fix.
+  way that looks like an impd bug. Find the fix for each in
+  [Guest and host facts](#guest-and-host-facts).
 
 ## Contents
 
@@ -46,8 +48,8 @@ The traps:
 
 1. Copy `setupTest()` from a journey of the same suite, or of any suite when you add a suite. It
    creates an `AsyncDisposableStack`, registers its disposal with `onTestFinished`, and returns the
-   stack, a client for the instance, and the suite's name prefix from `getSuitePrefix`. Each test
-   binds the result to `const ctx`.
+   stack, a client for the instance, and the suite's name prefix from `getSuitePrefix`. In each
+   test, bind the result to `const ctx`.
 2. Start the name of each imp, network, secret, OAuth client, token, image and template the journey
    makes with the name prefix.
 3. Register the removal of each one with
@@ -136,7 +138,8 @@ a run that includes `acceptance`, an overrun fails the journey.
 
 Touch a resource outside the instance only when the journey can prove it made the resource, or when
 the run owns the whole machine, as `E2E_OWNS_ZFS_HOST=1` marks below. For a new resource, write an
-owner file beside it, as the `registry` suite does. The harness's own checks:
+owner file beside it, as the `registry` suite does. The harness guards its own resources in these
+ways:
 
 - When the harness resets an instance, it deletes the instance's data dir as root.
   [`wipe-target.ts`](../../../../packages/e2e-harness/src/wipe-target.ts) decides which data dirs

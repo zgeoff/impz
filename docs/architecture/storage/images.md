@@ -2,8 +2,8 @@
 
 Any OCI image can be an imp. impd turns each image into one sparse ext4 file, once per image ID, and
 every disk made from it is a clone of that file ([storage](./storage.md)). The guest boots its agent
-from a separate system drive, so the image needs nothing of impz in it. The
-[images guide](../../guides/images.md) covers adding, building and making images.
+from a separate system drive, so the image needs nothing of impz in it. To add, build or make an
+image, see the [images guide](../../guides/images.md).
 
 ## From an OCI image to a disk
 
@@ -33,24 +33,24 @@ at start if a stop cut it short. A `RUN` step, a pull and the build frontend's f
 internet only, never the host, impd, other imps, the tailnet or private networks. The governor and
 the disk budget admit a builder as any imp, and a refusal fails the build rather than fall back to
 the host. impd streams the builder's export out of the guest into the same unpack every add uses,
-and computes the image's digest itself, so no engine on the host reads what the build made. A
-builder is impd's own: every call but a removal is refused it, it never sleeps in the background,
-and backups leave it out.
+and computes the image's digest itself, so no engine on the host reads what the build made. impd
+owns each builder: it refuses every call on a builder except a removal, never puts one to sleep in
+the background, and leaves builders out of backups.
 
 impd fetches the builder image itself, with no Docker engine. oci-fetch, a Go program in imp-host,
-reads the image that `IMP_BUILD_IMAGE` names from its registry, picks the host's platform from a
+reads the image set in `IMP_BUILD_IMAGE` from its registry, picks the host's platform from a
 multi-platform index, and writes the image's tree as one tar, with each layer's deletions applied.
 impd streams that tar into the same unpack, under the same limits, as a builder's export, and keys
 the rootfs by the image's manifest digest. impd passes oci-fetch no other reference, so a client
-cannot steer what the host fetches, and no engine on the host builds.
+cannot steer what the host fetches. No build engine runs on the host.
 
 impd checks the build's input on the host before any build step runs. It parses the Dockerfile with
 a port of the pinned frontend's parser and refuses what the engine would fetch on its own, such as
 an `ADD` from a URL or a git remote, a variable in `FROM`, and `ONBUILD`. It pins every image the
 Dockerfile names to its registry digest, then builds a rewritten copy of the context with the pinned
 frontend, so a Dockerfile cannot choose the frontend BuildKit runs. To pin them, impd pulls the
-named images in the builder before the build. The guard rejects inputs and isolates nothing: the
-builder is the isolation.
+named images in the builder before the build. These checks reject input and isolate nothing. The
+builder isolates the build.
 
 ## Template images
 

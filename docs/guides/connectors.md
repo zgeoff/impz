@@ -1,5 +1,8 @@
 # Credential connectors
 
+When you run impd, let an imp's agent use API tokens without holding them: add the token with
+`impz secret add`, grant it with `impz grant`, and check its use with `impz audit`.
+
 A coding agent in an imp needs API tokens for GitHub, Anthropic or npm. If the guest holds them,
 anything that runs there can read them and send them anywhere. With connectors, impd holds the
 token. You grant it to an imp, and a broker on the host adds it to the imp's requests for that
@@ -21,22 +24,22 @@ put secrets into the sandbox as environment variables.
 
 ## Secrets and grants
 
-| Command                                                    | What it does                                                                                                                                                          |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `impz secret add <name> --preset <preset>`                 | Stores a secret with a [preset's](#kinds-and-presets) hosts. The value comes from stdin or a prompt that does not echo, never from a flag.                            |
-| `impz secret add <name> --kind <kind> --hosts <hosts>`     | Stores a `static` or `oauth` secret for the hosts you name ([kinds and presets](#kinds-and-presets)).                                                                 |
-| `impz secret add <name> ... --identity`                    | Also adds a signed `Imp-Identity` header that names the imp ([imp identity](./imp-identity.md)).                                                                      |
-| `impz secret add <name> ... --replace`                     | Replaces the value of a secret that exists, for a rotation. Other hosts or headers need `--rebind` too ([rotate or rebind](#rotate-or-rebind)).                       |
-| `impz secret ls`                                           | Lists each secret's kind, state, hosts and imps. It never shows a value.                                                                                              |
-| `impz secret refresh <name>`                               | Refreshes an [oauth secret](#oauth-secrets) now, and exits 1 unless it is ready after it.                                                                             |
-| `impz secret rm <name>`                                    | Deletes a secret and revokes it from every imp.                                                                                                                       |
-| `impz grant <imp> <secret>`                                | Lets the imp use the secret.                                                                                                                                          |
-| `impz grant <imp> <secret> --methods GET --paths '/v1/**'` | Lets the imp use the secret only for those methods and paths ([narrow a grant](#narrow-a-grant)).                                                                     |
-| `impz revoke <imp> <secret>`                               | Takes it away. A request under way finishes; every later one fails, on any connection.                                                                                |
-| `impz grants <imp>`                                        | Lists the secrets granted to the imp.                                                                                                                                 |
-| `impz grants <imp> --filters`                              | Lists them with the methods and paths each one covers.                                                                                                                |
-| `impz audit [imp] [--limit n]`                             | Lists the requests the broker sent with a credential, newest first. `--kind api` lists the calls that changed impd instead ([events](./events.md#the-api-audit-log)). |
-| `impz audit [imp] --kind refused`                          | Lists the requests the broker refused, newest first, each with its reason.                                                                                            |
+| Command                                                    | What it does                                                                                                                                                               |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `impz secret add <name> --preset <preset>`                 | Stores a secret with a [preset's](#kinds-and-presets) hosts. The value comes from stdin or a prompt that does not echo, never from a flag.                                 |
+| `impz secret add <name> --kind <kind> --hosts <hosts>`     | Stores a `static` or `oauth` secret for the hosts you name ([kinds and presets](#kinds-and-presets)).                                                                      |
+| `impz secret add <name> ... --identity`                    | Also adds a signed `Imp-Identity` header that names the imp ([imp identity](./imp-identity.md)).                                                                           |
+| `impz secret add <name> ... --replace`                     | Replaces the value of a secret that exists, for a rotation. Other hosts or headers need `--rebind` too ([rotate or rebind](#rotate-or-rebind)).                            |
+| `impz secret ls`                                           | Lists each secret's kind, state, hosts and imps. It never shows a value.                                                                                                   |
+| `impz secret refresh <name>`                               | Refreshes an [oauth secret](#oauth-secrets) now, and exits 1 unless it is ready after it.                                                                                  |
+| `impz secret rm <name>`                                    | Deletes a secret and revokes it from every imp.                                                                                                                            |
+| `impz grant <imp> <secret>`                                | Lets the imp use the secret.                                                                                                                                               |
+| `impz grant <imp> <secret> --methods GET --paths '/v1/**'` | Lets the imp use the secret only for those methods and paths ([narrow a grant](#narrow-a-grant)).                                                                          |
+| `impz revoke <imp> <secret>`                               | Takes it away. A request under way finishes and an open WebSocket closes; every later request, on any connection, gets no credential: a 403 or a plain tunnel (see below). |
+| `impz grants <imp>`                                        | Lists the secrets granted to the imp.                                                                                                                                      |
+| `impz grants <imp> --filters`                              | Lists them with the methods and paths each one covers.                                                                                                                     |
+| `impz audit [imp] [--limit n]`                             | Lists the requests the broker sent with a credential, newest first. `--kind api` lists the calls that changed impd instead ([events](./events.md#the-api-audit-log)).      |
+| `impz audit [imp] --kind refused`                          | Lists the requests the broker refused, newest first, each with its reason.                                                                                                 |
 
 A secret name has the same form as an imp name. The value must be printable ASCII without spaces,
 which every API token is. An imp may hold one credential per host, so two grants that cover the same
@@ -117,7 +120,7 @@ filter, and a move and a backup carry it. A filtered grant travels apart from th
 from before filters drops it on a move or a restore rather than grant the whole host.
 
 Filters need an impd with `features.grantFilters`. An older impd drops the filter unread and grants
-the whole host, so a client checks `system.info()` before it sends one. `impz grant` does that check
+the whole host, so check `system.info()` before your client sends one. `impz grant` does that check
 when it is given `--methods` or `--paths`, and against an older impd it fails before it grants
 anything.
 
@@ -143,16 +146,16 @@ preset such as `github`, a plain `--replace` with that preset fails with `bindin
 gives and keeps the grants.
 
 The split between rotation and rebind needs impd 0.27.0 or later. An older impd drops `rebind`
-unread, takes a changed binding with a plain replace, and keeps every grant. Before a client sends
-`replace` or `rebind`, it checks that `system.info()` has `features.secretRebind`.
+unread, takes a changed binding with a plain replace, and keeps every grant. Before your client
+sends `replace` or `rebind`, check that `system.info()` has `features.secretRebind`.
 `impz secret add --replace` does that check, with or without `--rebind`, and against an older impd
 it fails before it stores anything.
 
 ### Value files
 
-Each value is a file of its own, named `<name>.<random>`, that impd never writes again, with one
-exception: the file of an [oauth secret](#oauth-secrets) holds its tokens as JSON, and each refresh
-rewrites that same file in place through a temp file, an fsync, a rename and an fsync of the
+Each value is a file of its own, named `<name>.<random>`, that impd never writes again. The one
+exception is the file of an [oauth secret](#oauth-secrets): it holds the tokens as JSON, and each
+refresh rewrites that same file in place through a temp file, an fsync, a rename and an fsync of the
 directory, so a crash leaves the old state or the new one. The secret's row names the file, and a
 replace or a rebind switches the row to a new one in the transaction that changes the rules. A
 request reads the row and then exactly that file: it gets the old rules with the old value, or the
@@ -197,7 +200,7 @@ a `static` secret when you add it, so `impz secret ls` lists that secret as `sta
 | Kind     | Hosts and headers                                                                                                                                                                                           | Placeholder variables |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | `static` | `--hosts a.example.com,b.example.com`, with `--header` (default `authorization`), `--scheme bearer\|basic\|raw`, `--user` and, for one host, `--upstream` ([no public name](#services-with-no-public-name)) | `--env`, if any       |
-| `oauth`  | As `static`, and the value is a refresh token ([oauth secrets](#oauth-secrets))                                                                                                                             | `--env`, if any       |
+| `oauth`  | As `static`, but with no `--upstream`, and the value is a refresh token ([oauth secrets](#oauth-secrets))                                                                                                   | `--env`, if any       |
 
 | Preset      | Hosts and headers                                                                                                            | Placeholder variables      |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
@@ -235,7 +238,7 @@ impz secret add op-connect --kind static --hosts op-connect.imp.internal \
 impz grant dev op-connect
 ```
 
-In the guest, the tool names the made-up host and holds a placeholder:
+In the guest, point the tool at the made-up host and give it the placeholder:
 
 ```sh
 OP_CONNECT_HOST=https://op-connect.imp.internal
@@ -243,9 +246,9 @@ OP_CONNECT_TOKEN=imp-broker-placeholder
 ```
 
 - `--upstream` needs `--kind static` and exactly one host.
-- The credential goes to the upstream, so it must be an address the operator trusts. impd does not
-  range-check it; the operator may point it at a service on the host on purpose. Only a caller that
-  may add or replace secrets can set one.
+- The credential goes to the upstream, so set only an address you trust. impd does not range-check
+  it; the operator may point it at a service on the host on purpose. Only a caller that may add or
+  replace secrets can set one.
 - The `Host` header the upstream sees is its own authority, never the guest's. The audit row keeps
   the guest-facing host.
 - The upstream is part of the binding ([rotate or rebind](#rotate-or-rebind)): changing, adding or
@@ -262,7 +265,7 @@ would go stale. Kind `oauth` holds the refresh token in impd. impd exchanges it 
 at the token endpoint before the old one expires, stores each rotated refresh token, and the broker
 sets the current access token on the granted hosts. The guest only ever holds the placeholder.
 
-Codex signed in with a ChatGPT account is an example. Its `auth.json` holds the refresh token:
+For example, Codex signed in with a ChatGPT account keeps its refresh token in `auth.json`:
 
 ```sh
 jq -r .tokens.refresh_token auth.json | impz secret add codex --kind oauth --hosts chatgpt.com \
@@ -282,12 +285,13 @@ impz grant dev codex
 its old value. The expiry is `expires_in`, else the `exp` of the access token if it is a JWT, else
 unknown.
 
-Add the secret from a refresh token you will not use again. The first refresh rotates it, so any
-other copy of the sign-in (a file, a password manager) goes stale and must not be used again.
+Add the secret from a refresh token you will not use again. The first refresh rotates it, so stop
+using any other copy of the sign-in (a file, a password manager): it goes stale.
 
 ### Refresh schedule and states
 
-impd checks every minute and once at start. A secret is refreshed when:
+impd checks every minute and once at start. It skips a secret that is waiting out a retry after a
+failed refresh (see `pending` below), and refreshes any other secret when:
 
 - it is `pending`, or has no access token: at once;
 - its expiry is unknown: when the last refresh is more than an hour old;
@@ -295,7 +299,7 @@ impd checks every minute and once at start. A secret is refreshed when:
   240-hour token is refreshed with 24 hours left, so an impd stopped for an upgrade does not hand
   out an expired token.
 
-A granted host's 401 also triggers a refresh ([refresh after a 401](#refresh-after-a-401)).
+A granted host's 401 can also trigger a refresh ([refresh after a 401](#refresh-after-a-401)).
 `impz secret refresh <name>` (`secrets.refresh`) forces one now, waits for it and prints the result;
 a refresh already running is the one it waits for. A refresh and a replace or a delete of the same
 secret never run together.
@@ -311,10 +315,10 @@ After a permanent error impd stops refreshing; a `needs_login` secret whose acce
 valid keeps sending it. Sign in again and run `impz secret add <name> ... --replace` with the new
 refresh token, or `impz secret refresh <name>` to try once more.
 
-Adding the secret runs the first refresh after the secret is saved and answers when it ends. A first
-refresh that fails still answers: `impz secret add` prints `pending` or `needs_login` with the
-reason on stderr. The reason is a short code such as `invalid_grant` or `HTTP 503`, never a response
-body.
+When you add the secret, impd saves it, runs the first refresh, and answers when that refresh ends.
+If the first refresh fails, impd still answers: `impz secret add` prints `pending` or `needs_login`
+with the reason on stderr. The reason is a short code such as `invalid_grant` or `HTTP 503`, never a
+response body.
 
 A restore of an older database or value file brings back a refresh token the endpoint has already
 rotated. It shows as `needs_login`; add the secret again with `--replace`.
@@ -334,9 +338,8 @@ because it holds only the placeholder, so impd refreshes for it.
 
 When a granted host answers 401 to an oauth secret's access token, the broker asks impd to refresh
 the secret. impd refreshes only a `ready` secret whose current access token is the one the host
-refused, that is at least 5 minutes old, and that no transient error holds back. The age floor keeps
-a guest from driving refreshes: a secret gets at most one such refresh every 5 minutes, whatever the
-guest sends.
+refused, that is at least 5 minutes old, and that no transient error holds back. So a guest cannot
+drive refreshes: a secret gets at most one such refresh every 5 minutes, whatever the guest sends.
 
 When a request without a body got the 401 and a new token is in place, the broker sends the request
 again once, with the new token, and the guest sees only that answer. The broker streamed the body of
@@ -379,12 +382,12 @@ carries the new token. `impz audit` lists each send as its own row.
    refused what its firewall refuses: the container's IPv4 networks, `IMP_EGRESS_DENY`, the networks
    of `IMP_HOST_ADDRESSES`, the IPv6 documentation ranges, and an address the host container routes
    out by another interface than a default route's. A tighter policy closes the tunnels it denies.
-4. **The guest's variables.** Every exec in an imp with a grant, and every command, shell and SFTP
-   server that the [SSH gateway](./ssh.md) starts, gets `HTTPS_PROXY` and `https_proxy`, `NO_PROXY`
-   for loopback, `NODE_USE_ENV_PROXY=1`, and `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`,
-   `GIT_SSL_CAINFO`, `REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE`, all pointing at
-   `/etc/imp/broker-ca.pem`. Variables the caller sets win. impd adds these on the host side, so the
-   agent protocol does not change.
+4. **The guest's variables.** Every exec in the container of an imp with a grant, and every command,
+   shell and SFTP server that the [SSH gateway](./ssh.md) starts, gets `HTTPS_PROXY` and
+   `https_proxy`, `NO_PROXY` for loopback, `NODE_USE_ENV_PROXY=1`, and `SSL_CERT_FILE`,
+   `NODE_EXTRA_CA_CERTS`, `GIT_SSL_CAINFO`, `REQUESTS_CA_BUNDLE` and `CURL_CA_BUNDLE`, all pointing
+   at `/etc/imp/broker-ca.pem`. An `outer` exec gets none. Variables the caller sets win. impd adds
+   these on the host side, so the agent protocol does not change.
 5. **The CA bundle.** Before the first exec of each boot or wake, impd runs one exec as root that
    builds the bundle in the guest: the guest's own root bundle (`/etc/ssl/certs/ca-certificates.crt`
    or the distro's path, CAs the guest added included) plus the broker CA. A guest with no root
@@ -395,13 +398,12 @@ carries the new token. `impz audit` lists each send as its own row.
 
 ### One CA for the host
 
-The issue asked for a CA per imp. impd uses one CA for the host instead. impd holds every CA key
-either way, so a CA per imp would isolate nothing. One CA also needs no lifecycle: a fork, a restore
-and a wake keep a CA they still trust. The per-imp boundary is the terminator: each (imp, host) pair
-has its own server, and it serves only the credential granted to that imp. The CA is
-`<data>/broker/ca/ca.pem`, with its key in `ca.key` (0600, in a 0700 directory). Leaves last one
-year and are issued again 30 days before they end. Each leaf has a SAN, `serverAuth` and the CA's
-key id, so strict verifiers such as Python 3.13 accept it.
+impd uses one CA for the host. impd holds every CA key either way, so a CA per imp would isolate
+nothing. One CA also needs no lifecycle: a fork, a restore and a wake keep a CA they still trust.
+The per-imp boundary is the terminator: each (imp, host) pair has its own server, and it serves only
+the credential granted to that imp. The CA is `<data>/broker/ca/ca.pem`, with its key in `ca.key`
+(0600, in a 0700 directory). Leaves last one year and are issued again 30 days before they end. Each
+leaf has a SAN, `serverAuth` and the CA's key id, so strict verifiers such as Python 3.13 accept it.
 
 ### Requiring the broker
 
@@ -436,17 +438,19 @@ exited run that the agent still holds attaches to that run. With `require: ['bro
 passes only when that run of the session was itself started with `require: ['broker']`. impd records
 each such run by its execution generation (one run of a session's process) in its database, so the
 record holds across sleeps, wakes and impd restarts, and a cold boot or a session started again
-without the requirement is a new run it does not cover. impd reads the agent's session list before
-it opens anything, so a refused attach almost never reaches the agent and the client attached to the
-session keeps it. One race remains: a plain exec takes no imp lock, so it can start that session
-between impd's list and its open, and the refused attach then takes the new session from its viewer;
-a start in the agent that only creates a session, and fails if one runs, would close it. The refusal
-is `broker_not_ready` with the detail `session <name> was started without the broker requirement`. A
-session on an agent from before output offsets, which names no generation, and one an imp brought
-from another host, never pass.
+without the requirement is a new run it does not cover. The refusal is `broker_not_ready` with the
+detail `session <name> was started without the broker requirement`. A session on an agent from
+before output offsets, which names no generation, and one an imp brought from another host, never
+pass.
 
-The boundary is exactly this: impd set the broker's variables and the CA bundle for this boot before
-it started the command. It does not prove that the process uses them: a command can unset
+impd reads the agent's session list before it opens anything, so a refused attach almost never
+reaches the agent and the client attached to the session keeps it. One race remains: a plain exec
+takes no imp lock, so it can start that session between impd's list and its open, and the refused
+attach then takes the new session from its viewer; a start in the agent that only creates a session,
+and fails if one runs, would close it.
+
+The requirement proves only that impd set the broker's variables and the CA bundle for this boot
+before it started the command. It does not prove that the process uses them: a command can unset
 `HTTPS_PROXY`, or ignore it, and then it reaches the network without the broker, and without the
 credential.
 
@@ -480,11 +484,12 @@ tunnel check turns away, a head that is not a CONNECT, a connection past the imp
 request on a granted connection for another host, a WebSocket upgrade that is not a `GET`, a request
 after a revoke, or one outside the grant's [filter](#narrow-a-grant). The broker refuses before it
 adds any credential, so a refused row has no secret. `impz audit --kind refused` lists each with its
-reason, such as `egress-policy`. A head without a host leaves the host empty. The log keeps the
-newest 1000 rows of each kind per imp, sent and refused, so a guest's refusals never push out the
-requests sent with its credentials. Across every imp, destroyed ones included, it keeps the newest
-100,000 rows. It records at most 20 refusals per imp in one second, because a refusal costs the
-guest almost nothing.
+reason, such as `egress-policy`. A head without a host leaves the host empty.
+
+The log keeps the newest 1000 rows of each kind per imp, sent and refused, so a guest's refusals
+never push out the requests sent with its credentials. Across every imp, destroyed ones included, it
+keeps the newest 100,000 rows. It records at most 20 refusals per imp in one second, because a
+refusal costs the guest almost nothing.
 
 ## Limits
 
