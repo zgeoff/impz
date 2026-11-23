@@ -21,6 +21,7 @@ import { createConsistentDisk } from '../imps/create-consistent-disk';
 import type { ImpCheckpointHooks } from '../imps/imp-service';
 import { readHeldImage } from './read-held-image';
 import { requireClientImageName } from './require-client-image-name';
+import { requireUnaliasedName } from './require-unaliased-name';
 import { removeUnusedRootfs } from './rootfs/remove-unused-rootfs';
 import { writeImageRow } from './write-image-row';
 
@@ -72,6 +73,8 @@ export function createTemplateService(deps: TemplateServiceDeps): TemplateServic
 
   const writeTemplate = async (impName: string, name: string): Promise<ImageRecord> => {
     requireClientImageName(name);
+
+    await requireUnaliasedName(deps.db, name);
 
     await deps.diskBudget.requireRoom(0);
 

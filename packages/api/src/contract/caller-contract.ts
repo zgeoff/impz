@@ -250,6 +250,16 @@ export const callerContract = {
 
     pin: base.meta(ACCESS.manageHeldImage).input(NameInputSchema).output(ImageSchema),
     unpin: base.meta(ACCESS.manageHeldImage).input(NameInputSchema).output(ImageSchema),
+
+    // sets an alias, or moves it when it exists; host-wide, as a delete is
+    alias: base
+      .meta(ACCESS.manageHost)
+      .input(z.object({ alias: NameSchema, image: NameSchema }))
+      .output(ImageSchema),
+    unalias: base
+      .meta(ACCESS.manageHost)
+      .input(z.object({ alias: NameSchema }))
+      .output(EmptySchema),
   },
 
   exec: {

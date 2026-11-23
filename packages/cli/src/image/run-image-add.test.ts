@@ -86,6 +86,7 @@ test('#runImageAdd makes a template from an imp through the stream of a current 
     createdAt: expect.toBeValidDate(),
     sizeBytes: expect.any(Number),
     pinned: false,
+    aliases: [],
   });
 
   expect(ctx.calls).toStrictEqual(['imps/create', 'system/features', 'images/addStream']);
@@ -117,6 +118,7 @@ test('#runOnHostBuild builds an image from a directory on the impd host through 
     createdAt: expect.toBeValidDate(),
     sizeBytes: expect.any(Number),
     pinned: false,
+    aliases: [],
   });
 
   expect(ctx.calls).toStrictEqual(['system/features', 'images/buildStream']);
@@ -170,6 +172,7 @@ test('#runImageAdd adds through the call that answers at the end on an impd from
     createdAt: expect.toBeValidDate(),
     sizeBytes: expect.any(Number),
     pinned: false,
+    aliases: [],
   });
 
   expect(older.calls).toStrictEqual(['system/features', 'images/add']);
@@ -205,6 +208,7 @@ test('#runOnHostBuild builds through the call that answers at the end on an impd
     createdAt: expect.toBeValidDate(),
     sizeBytes: expect.any(Number),
     pinned: false,
+    aliases: [],
   });
 
   expect(older.calls).toStrictEqual(['system/features', 'images/build']);

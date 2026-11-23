@@ -796,6 +796,94 @@ test('it records the service clock as the last use of an image it builds', async
   expect(row.last_used_at).toBe(Date.parse('2030-01-01T00:00:00Z'));
 });
 
+test('it builds an image from a context directory on the host', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+  });
+
+  const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+  });
+
+  const contextDir = join(ctx.directoryPath, 'context');
+
+  await mkdir(contextDir);
+  await writeFile(join(contextDir, 'Dockerfile'), 'FROM base.test/a:1\nRUN true\n');
+
+  const image = await images.runImageBuild(contextDir, 'web');
+  const saved = await readImageByName(ctx.db, 'web');
+
+  expect(saved).toStrictEqual(image);
+  expect(image.name).toBe('web');
+});
+
+test('it answers CONFLICT, and keeps no row, when an alias takes the name during a build', async () => {
+  const ctx = await setupTest();
+
+  const aliasing = Promise.withResolvers<null>();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.directoryPath, { hello: 'from the builder\n' })],
+    repoDigest: `sha256:${'a'.repeat(64)}`,
+    onExport: async () => {
+      await aliasing.promise;
+    },
+  });
+
+  const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.recordedBudget,
+    readBuilders: () => builder.builders,
+  });
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await Bun.write(
+    join(ctx.directoryPath, 'context.tar'),
+    createFilesTar(ctx.directoryPath, { Dockerfile: 'FROM base.test/a:1\nRUN true\n' }),
+  );
+
+  const building = images.buildImageFromContext(
+    join(ctx.directoryPath, 'context.tar'),
+    'web',
+    undefined,
+    { signal: new AbortController().signal },
+  );
+
+  await images.updateImageAlias('web', 'base-1');
+
+  aliasing.resolve(null);
+
+  await Promise.allSettled([building]);
+
+  expect(building).rejects.toMatchObject({ code: 'CONFLICT' });
+
+  const saved = await readImageByName(ctx.db, 'web');
+
+  expect(saved).toBeUndefined();
+});
+
 test('it returns a row that still exists when an eviction reaches a same-digest rebuild between its rootfs and its row', async () => {
   const ctx = await setupTest();
 

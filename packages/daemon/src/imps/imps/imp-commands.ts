@@ -33,7 +33,7 @@ import { resolveCpuSettings } from './resolve-cpu-settings';
 
 interface CreateImpInput {
   readonly name?: string | undefined;
-  readonly image?: string | undefined;
+  readonly image: ImageRecord;
   readonly vcpus?: number | undefined;
   readonly memoryMib?: number | undefined;
 
@@ -150,8 +150,7 @@ export function createImpCommands(parts: ImpCommandParts): ImpCommands {
   return {
     createImp: async (input) => {
       const received = performance.now();
-
-      const image = await context.images.resolveImage(input.image);
+      const image = input.image;
 
       if (input.policy !== undefined) {
         context.egress.requirePolicy(input.policy);

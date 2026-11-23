@@ -224,6 +224,7 @@ async function startImpdParts(
     config,
     db,
     imps: { ...imps, ...deps.agent },
+    images: stored.images,
     ensureImage: stored.images.ensureBuilderImage,
     testRegistry: firewall.testRegistry,
   });
@@ -474,9 +475,7 @@ async function setupDefaultImage(
   try {
     await images.addDefaultImage();
 
-    const existing = await images.listImages();
-
-    if (!existing.some((image) => image.name === config.defaultImage)) {
+    if (!(await probeDefaultImageName(config, images))) {
       getImpdLogger('image').warning(
         'no image named {defaultImage} (IMP_DEFAULT_IMAGE); impz new uses ubuntu until `impz image add <ref> --name {defaultImage}` adds it',
         { defaultImage: config.defaultImage },
@@ -487,4 +486,25 @@ async function setupDefaultImage(
       error: getErrorMessage(error),
     });
   }
+}
+
+// findDefaultImage reads without bumping an image's last use, and falls back to ubuntu, so the
+// image it finds counts only when it holds the configured name itself or as an alias.
+async function probeDefaultImageName(
+  config: Config,
+  images: Readonly<ImpdStorage['images']>,
+): Promise<boolean> {
+  const found = await images.findDefaultImage();
+
+  if (found === undefined) {
+    return false;
+  }
+
+  if (found.name === config.defaultImage) {
+    return true;
+  }
+
+  const aliases = await images.listImageAliases([found.id]);
+
+  return aliases.get(found.id)?.includes(config.defaultImage) ?? false;
 }

@@ -182,6 +182,7 @@ features before you send a field that a later impd added:
 | `secretFiles`, `removeSecretFiles` on `system.gc` | `secretFilesGc`   | 0.31.0 |
 | `id` on `imps.destroy`                            | `destroyIdCheck`  | 6.10.0 |
 | `identity.jwks`, `identity.stageKey`              | `secretIdentity`  | 6.12.0 |
+| `images.alias`, `images.unalias`                  | `imageAliases`    | 7.8.0  |
 
 `requireFeatures` reads the flags once, from `system.features`, or from `system.info` on an impd
 older than it. It throws a `MissingFeatureError` for the first feature missing, with what that impd

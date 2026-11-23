@@ -20,6 +20,7 @@ import {
   updateImageUse,
 } from './create-image';
 import { createImp } from './list-imps';
+import { updateImageAlias } from './update-image-alias';
 
 test('#createImage returns the stored image, a docker image by default', async () => {
   const ctx = await createTestDatabase();
@@ -323,6 +324,7 @@ test('#listImageUses lists each image with its last use and the imps that use it
       lastUsedAt: expect.toBeWithin(Date.now() - 60_000, Date.now() + 1),
       impCount: 0,
       isPinned: true,
+      isAliased: false,
     },
     {
       id: image.id,
@@ -333,6 +335,7 @@ test('#listImageUses lists each image with its last use and the imps that use it
       lastUsedAt: Date.parse('2030-01-01T00:00:00Z'),
       impCount: 2,
       isPinned: false,
+      isAliased: false,
     },
   ]);
 });
@@ -541,4 +544,56 @@ test('#removeUnusedImage keeps an image used again since the caller read its las
 
   expect(isRemoved).toBeFalse();
   expect(stored).toMatchObject({ id: image.id });
+});
+
+test('#createImage refuses a name an alias holds', async () => {
+  const ctx = await createTestDatabase();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
+  await updateImageAlias(ctx.db, 'agent', 'base', 100);
+
+  expect(createImage(ctx.db, buildMockNewImage({ name: 'agent' }))).rejects.toMatchObject({
+    code: 'CONFLICT',
+  });
+});
+
+test('#removeImage a raw delete of an aliased image fails on the foreign key', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
+
+  await updateImageAlias(ctx.db, 'agent', 'base', 100);
+
+  const deleting = ctx.db.deleteFrom('images').where('id', '=', image.id).execute();
+
+  expect(deleting).rejects.toThrow(/FOREIGN KEY/v);
+});
+
+test('#removeUnusedImage keeps an aliased image', async () => {
+  const ctx = await createTestDatabase();
+  const image = await createImage(ctx.db, buildMockNewImage({ name: 'base' }), 100);
+
+  await updateImageAlias(ctx.db, 'agent', 'base', 200);
+
+  const isRemoved = await removeUnusedImage(ctx.db, image.id, 100);
+
+  expect(isRemoved).toBe(false);
+
+  const kept = await readImageByName(ctx.db, 'base');
+
+  expect(kept).toStrictEqual(image);
+});
+
+test('#listImageUses marks an image an alias points at', async () => {
+  const ctx = await createTestDatabase();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'tools' }));
+  await updateImageAlias(ctx.db, 'agent', 'base', 100);
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses.map((use) => [use.name, use.isAliased])).toStrictEqual([
+    ['base', true],
+    ['tools', false],
+  ]);
 });

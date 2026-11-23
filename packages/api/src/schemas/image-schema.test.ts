@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { ImageSchema, ImageSourceSchema } from './image-schema';
+import type { Image } from './image-schema';
 
 test.each(['oci', 'imp'])('#ImageSourceSchema accepts the %s source', (input) => {
   expect(ImageSourceSchema.safeParse(input).data).toBe(input);
@@ -23,7 +24,39 @@ test('#ImageSchema accepts an image', () => {
     sizeBytes: 1_048_576,
   } as const;
 
+  expect(ImageSchema.safeParse(payload).data).toStrictEqual({ ...payload, aliases: [] });
+});
+
+test('#ImageSchema keeps the aliases of an image', () => {
+  const payload = {
+    id: 'img-1',
+    name: 'base',
+    ref: 'docker.io/library/alpine:3',
+    digest: 'sha256:abc',
+    source: 'oci',
+    createdAt: new Date('2026-01-02T03:04:05.000Z'),
+    pinned: false,
+    aliases: ['agent', 'stable'],
+    sizeBytes: 1_048_576,
+  } satisfies Image;
+
   expect(ImageSchema.safeParse(payload).data).toStrictEqual(payload);
+});
+
+test('#ImageSchema rejects an alias that is not a valid name', () => {
+  const result = ImageSchema.safeParse({
+    id: 'img-1',
+    name: 'base',
+    ref: 'docker.io/library/alpine:3',
+    digest: 'sha256:abc',
+    source: 'oci',
+    createdAt: new Date('2026-01-02T03:04:05.000Z'),
+    pinned: false,
+    aliases: ['Agent'],
+    sizeBytes: 1_048_576,
+  });
+
+  expect(result.error?.issues).toPartiallyContain({ path: ['aliases', 0] });
 });
 
 test('#ImageSchema rejects a name that is not a valid name', () => {

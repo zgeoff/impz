@@ -421,6 +421,7 @@ test('#images.addStream hands on each progress event, then the image', async () 
         createdAt: expect.toBeDate(),
         sizeBytes: expect.toBeNumber(),
         pinned: false,
+        aliases: [],
       },
     },
   ]);
@@ -512,6 +513,7 @@ test('#images.buildStream hands on each progress event as it comes, then the ima
         createdAt: expect.toBeDate(),
         sizeBytes: expect.toBeNumber(),
         pinned: false,
+        aliases: [],
       },
     },
   ]);

@@ -1,7 +1,8 @@
 import { EGRESS_MODE_TRAITS, isImpAllowed } from '@impz/api';
-import type { EgressMode, Identity, SystemInfo } from '@impz/api';
+import type { EgressMode, Identity, Image, SystemInfo } from '@impz/api';
 import { ORPCError, findMissingFeatures } from '@impz/client';
 import type { ImpClient } from '../config/create-imp-client';
+import { getImageAliases } from '../image/get-image-aliases';
 import type { HostAnswer } from './run-on-hosts';
 
 export interface PlaceRequest {
@@ -56,7 +57,7 @@ export async function readHostProbe(
   return {
     info,
     identity,
-    images: images.map((image) => image.name),
+    images: collectImageNames(images),
     imps: imps.map((imp) => imp.name),
     networks: networks.map((network) => network.name),
   };
@@ -213,4 +214,14 @@ function getFreeMib(info: SystemInfo): number {
     ((info.ramSleepingMib ?? 0) - prioritySleepingMib) -
     Math.max(info.ramPriorityKeptMib ?? 0, prioritySleepingMib)
   );
+}
+
+function collectImageNames(images: readonly Image[]): string[] {
+  const names: string[] = [];
+
+  for (const image of images) {
+    names.push(image.name, ...getImageAliases(image));
+  }
+
+  return names;
 }

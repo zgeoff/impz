@@ -65,7 +65,7 @@ interface ReceiveStreamDeps {
   >;
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
-  readonly images: Pick<ImageService, 'withImagePublisher'>;
+  readonly images: Pick<ImageService, 'withImagePublisher' | 'removeIdleRootfs' | 'resolveImage'>;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp'>;
   readonly grants: Pick<ImpGrants, 'addGrant'>;
   readonly egress: Pick<EgressService, 'writeAnswers'>;
@@ -175,7 +175,7 @@ export async function readMoveStream(
       await deps.imps.createImp({
         id: header.imp.id,
         name: header.imp.name,
-        image: image.name,
+        image: await deps.images.resolveImage(image.name),
         ...(header.imp.clonedDigest !== undefined && { imageDigest: header.imp.clonedDigest }),
         vcpus: header.imp.vcpus,
         memoryMib: header.imp.memoryMib,

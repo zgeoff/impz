@@ -92,7 +92,7 @@ export interface MoveReceiverDeps {
   >;
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly diskBudget: Pick<DiskBudget, 'requireRoom' | 'withRoom'>;
-  readonly images: Pick<ImageService, 'withImagePublisher'>;
+  readonly images: Pick<ImageService, 'withImagePublisher' | 'removeIdleRootfs' | 'resolveImage'>;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp' | 'lockImpId'>;
   readonly grants: Pick<ImpGrants, 'addGrant'>;
   readonly egress: Pick<EgressService, 'writeAnswers'>;

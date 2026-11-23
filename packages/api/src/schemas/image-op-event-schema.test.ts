@@ -45,7 +45,10 @@ test('it accepts an image event', () => {
     },
   } as const;
 
-  expect(ImageOpEventSchema.safeParse(payload).data).toStrictEqual(payload);
+  expect(ImageOpEventSchema.safeParse(payload).data).toStrictEqual({
+    ...payload,
+    image: { ...payload.image, aliases: [] },
+  });
 });
 
 test('it rejects an image event with its date as a string', () => {

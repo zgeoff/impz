@@ -994,6 +994,25 @@ test('#runMigrations leaves each image unpinned in the image pin migration', asy
   expect(rows).toStrictEqual([{ id: 'one', pinned: 0 }]);
 });
 
+test('#runMigrations adds the image alias table to an existing database', async () => {
+  const db = createUnmigratedDatabase();
+
+  await runMigrationsTo(db, '046_move_grants_to_mcp_auth');
+
+  await sql`INSERT INTO images (id, name, ref, digest, size_bytes, created_at, last_used_at)
+    VALUES ('one', 'web-1111111', 'imp/web:1', 'sha256:1', 1, 100, 100)`.execute(db);
+
+  await runMigrations(db);
+
+  await sql`INSERT INTO image_aliases (name, image_id, updated_at) VALUES ('agent', 'one', 200)`.execute(
+    db,
+  );
+
+  const rows = await db.selectFrom('image_aliases').selectAll().execute();
+
+  expect(rows).toStrictEqual([{ name: 'agent', image_id: 'one', updated_at: 200 }]);
+});
+
 test('#runMigrations gives each preset secret its variables in the secret env migration', async () => {
   const db = createUnmigratedDatabase();
 

@@ -46,6 +46,7 @@ test('it gives a build a public builder of the build size', async () => {
   const builders = createBuilders({
     config: { build: { ...ctx.config.build, memoryMib: 512, diskBytes: 4 * 1024 ** 3 } },
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -80,6 +81,7 @@ test('it holds the public egress policy for the builder while the build runs', a
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -111,6 +113,7 @@ test('it removes the builder and its egress policy when the build ends', async (
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -150,6 +153,7 @@ test('it adds the builder image before the builder starts', async () => {
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -181,6 +185,7 @@ test('it asks the builder engine again, a poll later, until it answers, then run
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -220,6 +225,7 @@ test('it logs the time its builder took to answer, on its clock', async () => {
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -248,6 +254,7 @@ test('it names each builder with its name picker', async () => {
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -274,6 +281,7 @@ test('it writes the test registry into the builder, once its engine answers and 
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -325,6 +333,7 @@ test('it fails the build when the builder refuses the test registry, and removes
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -371,6 +380,7 @@ test('it fails the build when the builder engine does not answer in 60 s, and re
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -413,6 +423,7 @@ test('it asks the builder engine again when the agent sends no exec start in tim
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => opens.next()(request),
@@ -437,6 +448,7 @@ test('it fails the build in 60 s when the agent never sends an exec start', asyn
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: () =>
@@ -469,6 +481,7 @@ test('it names the time the engine wait took when each exec start stalls past th
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: () => {
@@ -502,6 +515,7 @@ test('it fails the build at once with the error of an exec open that is no late 
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: () => Promise.reject(new Error('imp imp-build-a is in error')),
@@ -533,6 +547,7 @@ test("it gives the tail of the builder engine's log when the engine does not ans
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -567,6 +582,7 @@ test('it removes the builder of a failed build and rethrows the build error', as
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -596,6 +612,7 @@ test('it removes the builders a stopped impd left, and never a user imp', async 
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -629,6 +646,7 @@ test('it keeps the build of a builder that survives its removal, and logs the su
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -671,6 +689,7 @@ test('it removes a builder that survived its removal on a later retry', async ()
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -714,6 +733,7 @@ test('it retries the removal of a leftover builder that survives it at start', a
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -768,6 +788,7 @@ test('it never removes a user imp that took the id of a removed builder on a ret
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => guest.open(request),
@@ -842,6 +863,7 @@ test('it ends an export over its file limit and removes its builder, with no cli
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: (_name, request) => engine.guest.open(request),
@@ -896,6 +918,7 @@ test('it ends an export stopped while its exec opens, closes the exec and remove
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
       openBuilderExec: async (_name, request) => {
@@ -977,6 +1000,7 @@ test('it leaves the imp that holds a name a builder create fails on', async () =
   const builders = createBuilders({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: {
       ...ctx.impd.imps,
 

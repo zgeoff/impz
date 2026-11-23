@@ -433,3 +433,21 @@ test('it moves a frozen clock by the pauses of a young guest wait', async () => 
 
   expect(harness.now()).toBe(1_000_200);
 });
+
+test('it reads the disk space a test boundary gives', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const harness = await startTestImpd(stack, {
+    boundaries: {
+      readDiskSpace: () => Promise.resolve({ usedBytes: 1024 ** 4, availableBytes: 0 }),
+    },
+  });
+
+  await harness.createTestImage('ubuntu');
+
+  expect(harness.client.imps.create({ name: 'dev', image: 'ubuntu' })).rejects.toMatchObject({
+    code: 'DISK_FULL',
+  });
+});

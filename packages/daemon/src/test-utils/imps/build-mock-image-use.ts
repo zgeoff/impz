@@ -11,6 +11,7 @@ export function buildMockImageUse(overrides: Partial<ImageUse> = {}): ImageUse {
     lastUsedAt: faker.date.past().getTime(),
     impCount: 0,
     isPinned: false,
+    isAliased: false,
     ...overrides,
   };
 }

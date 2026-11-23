@@ -4,6 +4,7 @@ import { ImpdError, isImpdError } from './impd-error';
 type ResourceKind =
   | 'imp'
   | 'image'
+  | 'image alias'
   | 'checkpoint'
   | 'session'
   | 'service'
