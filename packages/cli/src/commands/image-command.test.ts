@@ -307,7 +307,20 @@ test('#imageCommand aliases an image so that image ls shows the alias', async ()
   });
 
   expect(aliased.code).toBe(0);
-  expect(JSON.parse(listed.stdout)).toMatchObject([{ name: 'agent-3f9c2a1', aliases: ['agent'] }]);
+
+  expect(JSON.parse(listed.stdout)).toStrictEqual([
+    {
+      id: expect.toBeString(),
+      name: 'agent-3f9c2a1',
+      ref: expect.toBeString(),
+      digest: expect.toBeString(),
+      source: 'oci',
+      createdAt: expect.toBeString(),
+      sizeBytes: expect.toBeNumber(),
+      pinned: false,
+      aliases: ['agent'],
+    },
+  ]);
 });
 
 test('#imageCommand removes an alias', async () => {

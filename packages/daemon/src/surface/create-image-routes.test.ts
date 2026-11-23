@@ -1,8 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
-import { createImage } from '../platform/db/create-image';
-import { buildMockNewImage } from '../test-utils/imps/build-mock-new-image';
-import { buildImagePaths } from '../vm/storage/build-imp-paths';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -12,56 +9,110 @@ async function setupTest() {
   const harness = await startTestImpd(stack);
 
   return {
-    db: harness.db,
-    dataDir: harness.dataDir,
     client: harness.client,
     buildClient: harness.buildClient,
-    createTestImage: async (name: string) => {
-      await Bun.write(buildImagePaths(harness.dataDir, `sha256:${name}`).rootfs, 'rootfs');
-
-      return createImage(
-        harness.db,
-        buildMockNewImage({ name, digest: `sha256:${name}`, sizeBytes: 6 }),
-      );
-    },
+    createTestImage: harness.createTestImage,
   };
 }
 
 test('#images.alias returns the image with its aliases', async () => {
   const ctx = await setupTest();
+  const created = await ctx.createTestImage('base-1');
 
-  await ctx.createTestImage('base-1');
   await ctx.client.images.alias({ alias: 'stable', image: 'base-1' });
 
   const image = await ctx.client.images.alias({ alias: 'agent', image: 'base-1' });
 
-  expect(image).toMatchObject({ name: 'base-1', aliases: ['agent', 'stable'] });
+  expect(image).toStrictEqual({
+    id: created.id,
+    name: 'base-1',
+    ref: created.ref,
+    digest: created.digest,
+    source: 'oci',
+    createdAt: created.createdAt,
+    sizeBytes: created.sizeBytes,
+    pinned: false,
+    aliases: ['agent', 'stable'],
+  });
 });
 
 test('#images.list returns the aliases of each image', async () => {
   const ctx = await setupTest();
+  const first = await ctx.createTestImage('base-1');
+  const second = await ctx.createTestImage('base-2');
 
-  await ctx.createTestImage('base-1');
-  await ctx.createTestImage('base-2');
   await ctx.client.images.alias({ alias: 'agent', image: 'base-1' });
 
   const images = await ctx.client.images.list();
 
-  expect(images.map((image) => [image.name, image.aliases])).toStrictEqual([
-    ['base-1', ['agent']],
-    ['base-2', []],
+  expect(images).toStrictEqual([
+    {
+      id: first.id,
+      name: 'base-1',
+      ref: first.ref,
+      digest: first.digest,
+      source: 'oci',
+      createdAt: first.createdAt,
+      sizeBytes: first.sizeBytes,
+      pinned: false,
+      aliases: ['agent'],
+    },
+    {
+      id: second.id,
+      name: 'base-2',
+      ref: second.ref,
+      digest: second.digest,
+      source: 'oci',
+      createdAt: second.createdAt,
+      sizeBytes: second.sizeBytes,
+      pinned: false,
+      aliases: [],
+    },
   ]);
 });
 
 test('#images.pin returns the aliases of the image it pins', async () => {
   const ctx = await setupTest();
+  const created = await ctx.createTestImage('base-1');
 
-  await ctx.createTestImage('base-1');
   await ctx.client.images.alias({ alias: 'agent', image: 'base-1' });
 
   const image = await ctx.client.images.pin({ name: 'base-1' });
 
-  expect(image).toMatchObject({ pinned: true, aliases: ['agent'] });
+  expect(image).toStrictEqual({
+    id: created.id,
+    name: 'base-1',
+    ref: created.ref,
+    digest: created.digest,
+    source: 'oci',
+    createdAt: created.createdAt,
+    sizeBytes: created.sizeBytes,
+    pinned: true,
+    aliases: ['agent'],
+  });
+});
+
+test('#images.add of a template again returns the aliases of the image it replaces', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('base-1');
+  await ctx.client.imps.create({ name: 'dev', image: 'base-1' });
+  await ctx.client.images.add({ imp: 'dev', name: 'tools' });
+  await ctx.client.images.alias({ alias: 'agent', image: 'tools' });
+
+  const image = await ctx.client.images.add({ imp: 'dev', name: 'tools' });
+
+  expect(image).toStrictEqual({
+    id: expect.toBeString(),
+    name: 'tools',
+    ref: expect.toBeString(),
+    digest: expect.toBeString(),
+    source: 'imp',
+    createdAt: expect.toBeValidDate(),
+    sizeBytes: expect.toBeNumber(),
+    pinned: false,
+    aliases: ['agent'],
+  });
 });
 
 test('#images.unalias removes the alias from the list', async () => {
@@ -73,10 +124,10 @@ test('#images.unalias removes the alias from the list', async () => {
 
   const images = await ctx.client.images.list();
 
-  expect(images.find((image) => image.name === 'base-1')?.aliases).toStrictEqual([]);
+  expect(images.map((image) => image.aliases)).toStrictEqual([[]]);
 });
 
-test('#images.delete refuses an aliased image, and removes it after unalias', async () => {
+test('#images.delete refuses an aliased image and names the alias, then removes it after unalias', async () => {
   const ctx = await setupTest();
 
   await ctx.createTestImage('base-1');
@@ -86,7 +137,7 @@ test('#images.delete refuses an aliased image, and removes it after unalias', as
 
   await expect(refused).rejects.toMatchObject({
     code: 'CONFLICT',
-    message: expect.stringContaining('agent'),
+    message: 'image base-1 is pointed at by alias agent; remove it with image unalias first',
   });
 
   await ctx.client.images.unalias({ alias: 'agent' });

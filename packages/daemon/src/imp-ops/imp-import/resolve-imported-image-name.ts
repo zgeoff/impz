@@ -1,6 +1,6 @@
 import { readImageByName } from '../../platform/db/create-image';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import { probeImageAlias } from '../../platform/db/update-image-alias';
+import { probeImageAlias } from '../../platform/db/probe-image-alias';
 import { buildConflictError } from '../../platform/errors/build-not-found-error';
 import { buildDigestTag } from './build-digest-tag';
 

@@ -134,6 +134,44 @@ test('it uploads a Blob as the build context and answers the image', async () =>
   expect(note.stdout.toString()).toBe('as a blob');
 });
 
+test('it answers the image with the aliases that point at it', async () => {
+  const ctx = await setupTest();
+
+  const builder = buildStubImageBuilder({
+    exported: [
+      createFilesTar(ctx.workDir, { hello: 'built\n' }),
+      createFilesTar(ctx.workDir, { hello: 'built\n' }),
+    ],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+  });
+
+  const host = await ctx.startImpd(builder);
+
+  await mkdir(join(ctx.workDir, 'context'));
+  await writeFile(join(ctx.workDir, 'context', 'Dockerfile'), 'FROM scratch\nCOPY note /\n');
+  await writeFile(join(ctx.workDir, 'context', 'note'), 'as a blob');
+
+  const tar = Bun.spawnSync(['tar', '-C', join(ctx.workDir, 'context'), '-c', '.']).stdout;
+  const client = createImpClient({ url: host.url, token: ctx.rootToken });
+
+  await client.buildImage('web', new Blob([tar]));
+  await client.images.alias({ alias: 'agent', image: 'web' });
+
+  const rebuilt = await client.buildImage('web', new Blob([tar]));
+
+  expect(rebuilt).toStrictEqual({
+    id: expect.toBeString(),
+    name: 'web',
+    ref: 'imp/web:latest',
+    digest: expect.stringMatching(/^imp-build-[0-9a-f]{64}$/u),
+    source: 'oci',
+    createdAt: expect.toBeDate(),
+    sizeBytes: expect.toBeNumber(),
+    pinned: false,
+    aliases: ['agent'],
+  });
+});
+
 test('it uploads bytes as the build context', async () => {
   const ctx = await setupTest();
 

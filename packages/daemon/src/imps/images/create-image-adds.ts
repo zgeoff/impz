@@ -178,6 +178,8 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
       return;
     }
 
+    await requireUnaliasedName(deps.db, BUILDER_IMAGE);
+
     await waitForPull(
       builderImage.run(BUILDER_IMAGE, () => createBuilderImage(ref)),
       signal,

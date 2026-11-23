@@ -267,7 +267,7 @@ export async function startTestImpd(
       logRpcFailure: printRpcFailure,
       now: readClock,
       readTailscale: extra.readTailscale ?? readNoTailscale,
-      readDiskSpace: () => Promise.resolve({ ...diskUsage }),
+      readDiskSpace: extra.readDiskSpace ?? (() => Promise.resolve({ ...diskUsage })),
       resolveIpv6: () => Promise.resolve(options.ipv6 ?? null),
       readIdentity: () => identity,
       cgroups,

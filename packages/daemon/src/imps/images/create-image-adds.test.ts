@@ -1682,7 +1682,7 @@ test('it leaves no new row and no rootfs when a template takes the name during a
   await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
 
   const exporting = Promise.withResolvers<null>();
-  const templated = Promise.withResolvers<null>();
+  const aliased = Promise.withResolvers<null>();
 
   const builder = buildStubImageBuilder({
     exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
@@ -1690,7 +1690,7 @@ test('it leaves no new row and no rootfs when a template takes the name during a
     onExport: async () => {
       exporting.resolve(null);
 
-      await templated.promise;
+      await aliased.promise;
     },
   });
 
@@ -1721,7 +1721,7 @@ test('it leaves no new row and no rootfs when a template takes the name during a
   await exporting.promise;
   await createImage(ctx.db, buildMockNewImage({ name: 'box', source: 'imp', sourceImp: 'dev' }));
 
-  templated.resolve(null);
+  aliased.resolve(null);
 
   expect(adding).rejects.toThrowWithMessage(
     Error,
@@ -1736,6 +1736,77 @@ test('it leaves no new row and no rootfs when a template takes the name during a
   );
 
   expect(box?.source).toBe('imp');
+  expect(built).toStrictEqual([]);
+  expect(status.pendingBytes).toBe(0);
+});
+
+test('it leaves no new row and no rootfs when an alias takes the name during an add', async () => {
+  const ctx = await setupTest();
+
+  const config = loadConfig({
+    IMP_DATA_DIR: ctx.dataDir,
+    IMP_BUILD_MEMORY_MIB: '512',
+    IMP_BUILD_DISK_GIB: '4',
+  });
+
+  await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
+
+  const exporting = Promise.withResolvers<null>();
+  const aliased = Promise.withResolvers<null>();
+
+  const builder = buildStubImageBuilder({
+    exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
+    repoDigest: `sha256:${'b'.repeat(64)}`,
+    onExport: async () => {
+      exporting.resolve(null);
+
+      await aliased.promise;
+    },
+  });
+
+  const images = createImageService({
+    config,
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: ctx.impd.storageGate,
+    diskBudget: ctx.impd.diskBudget,
+    readBuilders: () => builders,
+  });
+
+  const builders = createBuilders({
+    config,
+    db: ctx.db,
+    imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
+    ensureImage: (signal) => images.ensureBuilderImage(signal),
+  });
+
+  const adding = images.addImage('busybox:1.37', 'box');
+
+  await exporting.promise;
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await images.updateImageAlias('box', 'base-1');
+
+  aliased.resolve(null);
+
+  await Promise.allSettled([adding]);
+
+  expect(adding).rejects.toMatchObject({ code: 'CONFLICT' });
+
+  const box = await readImageByName(ctx.db, 'box');
+  const status = await ctx.impd.diskBudget.readStatus();
+
+  const built = readdirSync(join(ctx.dataDir, 'images')).filter((entry) =>
+    entry.startsWith('imp-build-'),
+  );
+
+  expect(box).toBeUndefined();
   expect(built).toStrictEqual([]);
   expect(status.pendingBytes).toBe(0);
 });
@@ -1992,7 +2063,7 @@ test('it logs a cleanup removal that fails, and returns the add its own error', 
   await createBuilderImage({ db: ctx.db, dataDir: ctx.dataDir, ref: config.build.image });
 
   const exporting = Promise.withResolvers<null>();
-  const templated = Promise.withResolvers<null>();
+  const aliased = Promise.withResolvers<null>();
 
   const builder = buildStubImageBuilder({
     exported: [createFilesTar(ctx.dataDir, { hello: 'pulled\n' })],
@@ -2000,7 +2071,7 @@ test('it logs a cleanup removal that fails, and returns the add its own error', 
     onExport: async () => {
       exporting.resolve(null);
 
-      await templated.promise;
+      await aliased.promise;
     },
   });
 
@@ -2035,7 +2106,7 @@ test('it logs a cleanup removal that fails, and returns the add its own error', 
   await exporting.promise;
   await createImage(ctx.db, buildMockNewImage({ name: 'box', source: 'imp', sourceImp: 'dev' }));
 
-  templated.resolve(null);
+  aliased.resolve(null);
 
   expect(adding).rejects.toThrowWithMessage(
     Error,

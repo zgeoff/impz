@@ -65,7 +65,7 @@ interface ReceiveStreamDeps {
   >;
   readonly storageGate: Pick<StorageGate, 'join'>;
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
-  readonly images: Pick<ImageService, 'withImagePublisher' | 'resolveImage'>;
+  readonly images: Pick<ImageService, 'withImagePublisher' | 'removeIdleRootfs' | 'resolveImage'>;
   readonly imps: Pick<Imps, 'createImp' | 'destroyImp'>;
   readonly grants: Pick<ImpGrants, 'addGrant'>;
   readonly egress: Pick<EgressService, 'writeAnswers'>;

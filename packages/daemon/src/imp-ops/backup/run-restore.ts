@@ -52,7 +52,7 @@ export interface RestoreDeps {
     StorageBackend,
     'createImage' | 'createCheckpoint' | 'createImpDisk' | 'resolveImpPaths'
   >;
-  readonly images: Pick<ImageService, 'withImagePublisher' | 'resolveImage'>;
+  readonly images: Pick<ImageService, 'withImagePublisher' | 'removeIdleRootfs' | 'resolveImage'>;
   readonly restic: Pick<Restic, 'unlock' | 'listSnapshots' | 'dump' | 'restore'>;
   readonly paths: Pick<ReturnType<typeof buildBackupPaths>, 'tree' | 'restoreDir'>;
   readonly storageGate: Pick<StorageGate, 'join'>;

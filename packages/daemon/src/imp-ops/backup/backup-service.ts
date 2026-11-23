@@ -87,7 +87,7 @@ export interface BackupServiceDeps {
   readonly tokens: Pick<TokenStore, 'createRestored'>;
   readonly networks: Pick<NetworkService, 'writeMissingNetworks' | 'removeEmptyNetworks'>;
   readonly storage: StorageBackend;
-  readonly images: Pick<ImageService, 'withImagePublisher' | 'resolveImage'>;
+  readonly images: Pick<ImageService, 'withImagePublisher' | 'removeIdleRootfs' | 'resolveImage'>;
   readonly restic?: Restic;
   readonly freezer?: DiskFreezer;
   readonly now?: () => Date;

@@ -5,6 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fireNextTimer } from '@impz/shared/test-utils/fire-next-timer';
+import { hookSQLiteStatements } from '@zgeoff/mcp-auth/testing';
 import { updateEnv, waitFor } from '@zgeoff/testing';
 import { createFakeClock } from '@zgeoff/testing/clock';
 import { loadConfig } from '../../config';
@@ -14,11 +15,13 @@ import {
   listImageUses,
   readImageByName,
 } from '../../platform/db/create-image';
+import { createImp } from '../../platform/db/list-imps';
 import { openDatabase } from '../../platform/db/open-database';
 import { runCommand } from '../../platform/process/run-command';
 import { runStreamed } from '../../platform/process/run-streamed';
 import { startRealTimer } from '../../platform/process/start-real-timer';
 import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
+import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { buildStubImageBuilder } from '../../test-utils/imps/build-stub-image-builder';
 import { createFilesTar } from '../../test-utils/imps/create-files-tar';
 import { createStubOciFetch } from '../../test-utils/imps/create-stub-oci-fetch';
@@ -1522,4 +1525,118 @@ test('#removeImage removes the image once its alias is gone', async () => {
   const image = await readImageByName(ctx.db, 'base-1');
 
   expect(image).toBeUndefined();
+});
+
+test('#resolveImage reads an alias and records its use in one statement', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  const statements: string[] = [];
+
+  hookSQLiteStatements(ctx.db.sqlite, (statement) => {
+    statements.push(statement);
+  });
+
+  await ctx.images.resolveImage('agent');
+
+  const aliasReads = statements.filter((statement) => statement.includes('image_aliases'));
+
+  expect(aliasReads).toStrictEqual([
+    expect.stringMatching(
+      /^update "images" set "last_used_at" = max\(.*image_aliases.*returning/iu,
+    ),
+  ]);
+});
+
+test('#resolveImage answers NOT_FOUND for an alias removed between the image lookup and the alias lookup', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  hookSQLiteStatements(ctx.db.sqlite, (statement) => {
+    if (statement.includes('image_aliases')) {
+      ctx.db.sqlite.run('DELETE FROM image_aliases');
+    }
+  });
+
+  expect(ctx.images.resolveImage('agent')).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+    message: 'image agent not found',
+  });
+});
+
+test('#addImage refuses a name derived from its ref when an alias holds it, before any pull', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('busybox', 'base-1');
+
+  expect(ctx.images.addImage('busybox:1.37')).rejects.toMatchObject({ code: 'CONFLICT' });
+});
+
+test('#ensureBuilderImage refuses before any pull when an alias holds the builder image name', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias(BUILDER_IMAGE, 'base-1');
+
+  expect(ctx.images.ensureBuilderImage()).rejects.toMatchObject({ code: 'CONFLICT' });
+});
+
+test('#runImageBuild refuses a name an alias holds before it reads the build context', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  expect(ctx.images.runImageBuild('/no-such-context', 'agent')).rejects.toMatchObject({
+    code: 'CONFLICT',
+  });
+});
+
+test('#removeImage answers CONFLICT naming both the imps and the aliases of an image', async () => {
+  const ctx = await setupTest();
+  const created = await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await createImp(ctx.db, buildMockNewImp({ name: 'dev', imageId: created.id }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  expect(ctx.images.removeImage('base-1')).rejects.toMatchObject({
+    code: 'CONFLICT',
+    message:
+      'image base-1 is used by 1 imp(s) and pointed at by alias agent; remove it with image unalias first',
+  });
+});
+
+test('#removeImage answers CONFLICT when an alias set after the check stops the delete and is gone again by the re-read', async () => {
+  const ctx = await setupTest();
+  const created = await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  const state = { isAliasAdded: false, isAliasRemoved: false };
+
+  hookSQLiteStatements(ctx.db.sqlite, (statement) => {
+    if (statement.startsWith('delete from "images"') && !state.isAliasAdded) {
+      state.isAliasAdded = true;
+
+      ctx.db.sqlite.run('INSERT INTO image_aliases (name, image_id, updated_at) VALUES (?, ?, 1)', [
+        'agent',
+        created.id,
+      ]);
+    } else if (state.isAliasAdded && !state.isAliasRemoved && statement.includes('image_aliases')) {
+      state.isAliasRemoved = true;
+
+      ctx.db.sqlite.run('DELETE FROM image_aliases');
+    }
+  });
+
+  expect(ctx.images.removeImage('base-1')).rejects.toMatchObject({ code: 'CONFLICT' });
 });

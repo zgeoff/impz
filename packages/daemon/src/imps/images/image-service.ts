@@ -10,16 +10,14 @@ import {
   updateImageUse,
 } from '../../platform/db/create-image';
 import type { ImageRecord } from '../../platform/db/create-image';
+import { isForeignKeyError } from '../../platform/db/is-foreign-key-error';
+import { listImageAliases } from '../../platform/db/list-image-aliases';
 import { countImpsUsingImage } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
-import {
-  isForeignKeyError,
-  listImageAliases,
-  readImageByAlias,
-  removeImageAlias,
-  updateAliasedImageUse,
-  updateImageAlias,
-} from '../../platform/db/update-image-alias';
+import { readImageByAlias } from '../../platform/db/read-image-by-alias';
+import { removeImageAlias } from '../../platform/db/remove-image-alias';
+import { updateAliasedImageUse } from '../../platform/db/update-aliased-image-use';
+import { updateImageAlias } from '../../platform/db/update-image-alias';
 import {
   buildConflictError,
   buildForbiddenError,
@@ -67,6 +65,7 @@ export type ImageService = ImageAdds &
     readonly runImageEviction: () => Promise<void>;
 
     readonly withImagePublisher: ImageWriter['withPublisher'];
+    readonly removeIdleRootfs: ImageWriter['removeIdleRootfs'];
   };
 
 export interface ImageServiceDeps {
@@ -178,16 +177,28 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
     throw buildNotFoundError('image', name ?? deps.config.defaultImage);
   };
 
-  const requireUnaliasedImage = async (image: ImageRecord): Promise<void> => {
+  const requireUnusedImage = async (image: ImageRecord): Promise<void> => {
+    const users = await countImpsUsingImage(deps.db, image.id);
     const found = await listImageAliases(deps.db, [image.id]);
 
     const aliases = found.get(image.id) ?? [];
+    const reasons: string[] = [];
+
+    if (users > 0) {
+      reasons.push(`used by ${String(users)} imp(s)`);
+    }
 
     if (aliases.length > 0) {
+      reasons.push(
+        `pointed at by alias ${aliases.join(', ')}; remove ${aliases.length === 1 ? 'it' : 'them'} with image unalias first`,
+      );
+    }
+
+    if (reasons.length > 0) {
       throw buildConflictError(
         'image',
         image.name,
-        `image ${image.name} is pointed at by alias ${aliases.join(', ')}; remove ${aliases.length === 1 ? 'it' : 'them'} with image unalias first`,
+        `image ${image.name} is ${reasons.join(' and ')}`,
       );
     }
   };
@@ -207,22 +218,22 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
         throw buildNotFoundError('image', name);
       }
 
-      const users = await countImpsUsingImage(deps.db, image.id);
-
-      if (users > 0) {
-        throw buildConflictError('image', name, `image ${name} is used by ${String(users)} imp(s)`);
-      }
-
-      await requireUnaliasedImage(image);
+      await requireUnusedImage(image);
 
       await deps.storageGate.join(async () => {
-        // an alias set after the check above stops the delete on its foreign key
+        // an imp or an alias that appears after the check above stops the delete on its foreign key
         await removeImage(deps.db, image.id).catch(async (error: unknown) => {
-          if (isForeignKeyError(error)) {
-            await requireUnaliasedImage(image);
+          if (!isForeignKeyError(error)) {
+            throw error;
           }
 
-          throw error;
+          await requireUnusedImage(image);
+
+          throw buildConflictError(
+            'image',
+            name,
+            `image ${name} is in use again; check its imps and aliases, then retry`,
+          );
         });
 
         const isRemoved = await writer.removeIdleRootfs(image.digest);
@@ -276,5 +287,6 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
     findDefaultImage: readDefaultImage,
     runImageEviction: runEviction,
     withImagePublisher: writer.withPublisher,
+    removeIdleRootfs: writer.removeIdleRootfs,
   };
 }

@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { ImageSchema, ImageSourceSchema } from './image-schema';
+import type { Image } from './image-schema';
 
 test.each(['oci', 'imp'])('#ImageSourceSchema accepts the %s source', (input) => {
   expect(ImageSourceSchema.safeParse(input).data).toBe(input);
@@ -27,7 +28,7 @@ test('#ImageSchema accepts an image', () => {
 });
 
 test('#ImageSchema keeps the aliases of an image', () => {
-  const result = ImageSchema.safeParse({
+  const payload = {
     id: 'img-1',
     name: 'base',
     ref: 'docker.io/library/alpine:3',
@@ -37,9 +38,9 @@ test('#ImageSchema keeps the aliases of an image', () => {
     pinned: false,
     aliases: ['agent', 'stable'],
     sizeBytes: 1_048_576,
-  });
+  } satisfies Image;
 
-  expect(result.data?.aliases).toStrictEqual(['agent', 'stable']);
+  expect(ImageSchema.safeParse(payload).data).toStrictEqual(payload);
 });
 
 test('#ImageSchema rejects an alias that is not a valid name', () => {

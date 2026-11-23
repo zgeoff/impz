@@ -1004,7 +1004,13 @@ test('#readHostProbe lists the names and the aliases of the images of a host', a
     needsWholeHost: false,
   });
 
-  expect(probe.images).toStrictEqual(['base-1', 'agent']);
+  expect(probe).toStrictEqual({
+    info: expect.toBeObject(),
+    identity: expect.toBeObject(),
+    images: ['base-1', 'agent'],
+    imps: [],
+    networks: [],
+  });
 });
 
 test('#buildRanking keeps a host that holds an alias of the image asked for', () => {

@@ -9,7 +9,7 @@ import { resolveImportedImageName } from './resolve-imported-image-name';
 export interface ImageImportDeps {
   readonly db: ImpDatabase;
   readonly storage: Pick<StorageBackend, 'createImage'>;
-  readonly images: Pick<ImageService, 'withImagePublisher'>;
+  readonly images: Pick<ImageService, 'withImagePublisher' | 'removeIdleRootfs'>;
   readonly now: () => number;
   readonly writeImageFiles: (files: ImageFiles, directory: string) => Promise<void>;
 }
@@ -31,6 +31,8 @@ export function createImageFromFile(deps: ImageImportDeps, image: ImportedImage)
       deps.writeImageFiles(image, directory),
     );
 
+    // The row write checks the alias table again, so an alias set since the name check fails it.
+    // The publisher still holds the digest, so the rootfs goes when the last publisher leaves.
     await createImage(
       deps.db,
       {
@@ -42,7 +44,11 @@ export function createImageFromFile(deps: ImageImportDeps, image: ImportedImage)
         sourceImp: image.sourceImp,
       },
       deps.now(),
-    );
+    ).catch(async (error: unknown) => {
+      await deps.images.removeIdleRootfs(image.digest);
+
+      throw error;
+    });
 
     return name;
   });

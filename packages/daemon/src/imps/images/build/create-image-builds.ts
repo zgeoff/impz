@@ -223,6 +223,8 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
     dockerfile: string | undefined,
     options: Readonly<ImageOpOptions>,
   ): Promise<ImageRecord> => {
+    await requireUnaliasedName(deps.db, requireClientImageName(name));
+
     if (!contextDir.startsWith('/')) {
       throw new ImpdError('BAD_REQUEST', {
         message: `build context ${JSON.stringify(contextDir)} is not an absolute path`,
