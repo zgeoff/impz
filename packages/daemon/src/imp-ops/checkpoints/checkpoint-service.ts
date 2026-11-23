@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs';
 import type { Checkpoint, Imp } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
 import { customAlphabet, customRandom } from 'nanoid';
+import type { ImageService } from '../../imps/images/image-service';
 import { createConsistentDisk } from '../../imps/imps/create-consistent-disk';
 import type { DiskFreezer } from '../../imps/imps/create-consistent-disk';
 import { toLockedImp } from '../../imps/imps/imp-lock';
@@ -62,6 +63,7 @@ export interface CheckpointServiceDeps {
   readonly config: ImpOpsConfig;
   readonly db: ImpDatabase;
   readonly imps: ImpCheckpointHooks;
+  readonly images: Pick<ImageService, 'resolveImage'>;
   readonly storage: StorageBackend;
   readonly freezer?: DiskFreezer;
   readonly diskBudget: Pick<DiskBudget, 'requireRoom'>;
@@ -329,7 +331,7 @@ export function createCheckpointService(deps: CheckpointServiceDeps): Checkpoint
       try {
         const fork = await deps.imps.createImp({
           name: input.name,
-          image: source.imp.image,
+          image: await deps.images.resolveImage(source.imp.image),
           imageDigest: source.imageDigest,
           vcpus: source.imp.vcpus,
           memoryMib: source.imp.memoryMib,

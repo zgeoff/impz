@@ -128,6 +128,7 @@ test('it uploads a Blob as the build context and answers the image', async () =>
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
     pinned: false,
+    aliases: [],
   });
 
   expect(note.stdout.toString()).toBe('as a blob');
@@ -165,6 +166,7 @@ test('it uploads bytes as the build context', async () => {
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
     pinned: false,
+    aliases: [],
   });
 
   expect(note.stdout.toString()).toBe('as bytes');
@@ -202,6 +204,7 @@ test('it uploads a stream as the build context', async () => {
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
     pinned: false,
+    aliases: [],
   });
 
   expect(note.stdout.toString()).toBe('as a stream');
@@ -291,6 +294,7 @@ test('it sends the size of a stream as its Content-Length, which impd builds to'
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
     pinned: false,
+    aliases: [],
   });
 
   expect(note.stdout.toString()).toBe('with its size');
@@ -495,6 +499,7 @@ test('it reports each progress event as it arrives, before the image', async () 
     createdAt: expect.toBeDate(),
     sizeBytes: expect.toBeNumber(),
     pinned: false,
+    aliases: [],
   });
 });
 

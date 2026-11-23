@@ -18,21 +18,25 @@ export function createImpRoutes(os: RpcImplementer, deps: RouterDeps, views: Cal
         );
       }
 
-      if (caller.imps !== null) {
-        const image = await deps.images.resolveImage(input.image);
+      // the check and the create share this record, so an alias that moves between them cannot
+      // bypass the check
+      const image = await deps.images.resolveImage(input.image);
 
-        if (image.sourceImp !== null && !isCallerAllowed(caller, 'manage', image.sourceImp)) {
-          throw buildForbiddenError(
-            `${formatCaller(caller)} may not copy imp ${image.sourceImp}, the source of template ${image.name}`,
-          );
-        }
+      if (
+        caller.imps !== null &&
+        image.sourceImp !== null &&
+        !isCallerAllowed(caller, 'manage', image.sourceImp)
+      ) {
+        throw buildForbiddenError(
+          `${formatCaller(caller)} may not copy imp ${image.sourceImp}, the source of template ${image.name}`,
+        );
       }
 
       const networkIds = await deps.networks.resolveNetworkIds(networks ?? []);
 
       return views.readCallerImp(
         caller,
-        deps.imps.createImp({ ...input, networkIds, isBackedUp: backup }),
+        deps.imps.createImp({ ...input, image, networkIds, isBackedUp: backup }),
       );
     }),
     list: os.imps.list.handler(async (context) => {

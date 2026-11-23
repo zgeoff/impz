@@ -609,7 +609,7 @@ test('it sets a lease end from the wall clock when no clock is given', async () 
     buildMockNewImage({ name: 'ubuntu', digest: 'sha256:ubuntu', sizeBytes: 6 }),
   );
 
-  await impd.imps.createImp({ name: 'dev' });
+  await impd.imps.createImp({ name: 'dev', image: await impd.images.resolveImage() });
 
   const startedMs = Date.now();
 

@@ -47,6 +47,7 @@ test('it evicts the least recently used images until usage would fall under the 
 test.each([
   ['an imp uses', { impCount: 1 }],
   ['is pinned', { isPinned: true }],
+  ['is aliased', { isAliased: true }],
   ['is the default image', { name: 'ubuntu' }],
   ['was used within the last hour', { lastUsedAt: 9_000_000 }],
 ])('it never evicts an image that %s', (_label, overrides) => {

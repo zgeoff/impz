@@ -135,16 +135,53 @@ const unpinCommand = defineCommand({
     }),
 });
 
+const aliasCommand = defineCommand({
+  name: 'alias',
+  description: 'Point an alias at an image, or move it: new imps get the image it points at',
+  args: {
+    alias: { type: 'positional', description: 'alias name', required: true },
+    image: { type: 'positional', description: 'image name', required: true },
+    json: jsonArg,
+  },
+  run: (ctx) =>
+    runAction(ctx.extensions.impz, async (client) => {
+      await requireFeatures(client, { imageAliases: 'not know the call' });
+
+      const image = await client.images.alias({
+        alias: ctx.values.alias,
+        image: ctx.values.image,
+      });
+
+      ctx.extensions.impz.io.print(
+        formatOutput(image, ctx.values.json, (one) => formatImages([one])),
+      );
+    }),
+});
+
+const unaliasCommand = defineCommand({
+  name: 'unalias',
+  description: 'Remove an image alias',
+  args: { alias: { type: 'positional', description: 'alias name', required: true } },
+  run: (ctx) =>
+    runAction(ctx.extensions.impz, async (client) => {
+      await requireFeatures(client, { imageAliases: 'not know the call' });
+
+      await client.images.unalias({ alias: ctx.values.alias });
+    }),
+});
+
 export const imageCommand = defineGroup({
   name: 'image',
   description: 'Manage images',
   subCommands: {
     add: addCommand,
+    alias: aliasCommand,
     build: buildCommand,
     builds: buildsCommand,
     ls: lsCommand,
     pin: pinCommand,
     rm: rmCommand,
+    unalias: unaliasCommand,
     unpin: unpinCommand,
   },
 });

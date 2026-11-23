@@ -140,6 +140,7 @@ test('it serves system.info from config and the database', async () => {
       execDropSysAdmin: true,
       guestScratch: true,
       imagePins: true,
+      imageAliases: true,
       buildContextUpload: true,
       destroyIdCheck: true,
       eventCursor: true,

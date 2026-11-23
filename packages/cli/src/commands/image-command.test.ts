@@ -286,6 +286,53 @@ test('#imageCommand unpins a pinned image', async () => {
   expect(image?.isPinned).toBeFalse();
 });
 
+test('#imageCommand aliases an image so that image ls shows the alias', async () => {
+  const ctx = await setupTest();
+
+  const harness = await startTestImpd(ctx.stack, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+  });
+
+  await createImage(harness.db, buildMockNewImage({ name: 'agent-3f9c2a1' }));
+
+  const aliased = await runCLIInProcess({
+    args: ['image', 'alias', 'agent', 'agent-3f9c2a1'],
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
+  });
+
+  const listed = await runCLIInProcess({
+    args: ['image', 'ls', '--json'],
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
+  });
+
+  expect(aliased.code).toBe(0);
+  expect(JSON.parse(listed.stdout)).toMatchObject([{ name: 'agent-3f9c2a1', aliases: ['agent'] }]);
+});
+
+test('#imageCommand removes an alias', async () => {
+  const ctx = await setupTest();
+
+  const harness = await startTestImpd(ctx.stack, {
+    dataDir: ctx.dataDir,
+    rootToken: ctx.rootToken,
+  });
+
+  await createImage(harness.db, buildMockNewImage({ name: 'agent-3f9c2a1' }));
+
+  await harness.client.images.alias({ alias: 'agent', image: 'agent-3f9c2a1' });
+
+  const result = await runCLIInProcess({
+    args: ['image', 'unalias', 'agent'],
+    env: { IMP_URL: harness.url, IMP_TOKEN: ctx.rootToken },
+  });
+
+  const images = await harness.client.images.list();
+
+  expect(result).toStrictEqual({ stdout: '', stderr: '', code: 0 });
+  expect(images.map((image) => image.aliases)).toStrictEqual([[]]);
+});
+
 test('#templateCommand refuses to remove a docker image as a template', async () => {
   const ctx = await setupTest();
 

@@ -797,6 +797,7 @@ test('it leaves an imp that took a refused fork’s name before the fork’s cle
   const checkpoints = createCheckpointService({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
 
     // once the fork's row is written, and before its disk is, another call removes the row and
     // queues a create of an imp by the fork's name
@@ -879,6 +880,7 @@ test('it draws a new id when the pool holds a snapshot by the drawn one', async 
   const checkpoints = createCheckpointService({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: ctx.impd.imps,
     storage: ctx.storage,
     diskBudget: ctx.impd.diskBudget,
@@ -920,6 +922,7 @@ test('it draws a new id when a deleted checkpoint’s snapshot stays for a fork'
   const checkpoints = createCheckpointService({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
 
     // the fork's disk file is in place once its row is, before its disk is made
     imps: {
@@ -981,6 +984,7 @@ test('it gives up after three drawn ids that each name a snapshot in the pool', 
   const checkpoints = createCheckpointService({
     config: ctx.config,
     db: ctx.db,
+    images: ctx.impd.images,
     imps: ctx.impd.imps,
     storage: ctx.storage,
     diskBudget: ctx.impd.diskBudget,

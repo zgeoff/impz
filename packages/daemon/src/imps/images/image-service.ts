@@ -13,6 +13,14 @@ import type { ImageRecord } from '../../platform/db/create-image';
 import { countImpsUsingImage } from '../../platform/db/list-imps';
 import type { ImpDatabase } from '../../platform/db/open-database';
 import {
+  isForeignKeyError,
+  listImageAliases,
+  readImageByAlias,
+  removeImageAlias,
+  updateAliasedImageUse,
+  updateImageAlias,
+} from '../../platform/db/update-image-alias';
+import {
   buildConflictError,
   buildForbiddenError,
   buildNotFoundError,
@@ -39,6 +47,14 @@ export type ImageService = ImageAdds &
     readonly removeImage: (name: string) => Promise<void>;
 
     readonly resolveImage: (name?: string) => Promise<ImageRecord>;
+
+    readonly updateImageAlias: (alias: string, image: string) => Promise<ImageRecord>;
+    readonly removeImageAlias: (alias: string) => Promise<void>;
+
+    // each image id's aliases, sorted; an image with none has no entry
+    readonly listImageAliases: (
+      imageIds: readonly string[],
+    ) => Promise<ReadonlyMap<string, readonly string[]>>;
 
     readonly findDefaultImage: () => Promise<ImageRecord | undefined>;
 
@@ -127,26 +143,53 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
       if (image !== undefined) {
         return image;
       }
+
+      const aliased = await readImageByAlias(deps.db, name);
+
+      if (aliased !== undefined) {
+        return aliased;
+      }
     }
 
     return undefined;
   };
 
+  const resolveImageName = async (name: string): Promise<ImageRecord | undefined> => {
+    // The use goes in before the read, so an eviction either sees it and keeps the image, or
+    // removed the image first and the read finds nothing.
+    await updateImageUse(deps.db, 'name', [name], clock.now());
+
+    const image = await readImageByName(deps.db, name);
+
+    return image ?? updateAliasedImageUse(deps.db, name, clock.now());
+  };
+
   const resolveImage = async (name?: string): Promise<ImageRecord> => {
     const names = name === undefined ? [deps.config.defaultImage, FALLBACK_DEFAULT_IMAGE] : [name];
 
-    // The use goes in before the read, so an eviction either sees it and keeps the image, or
-    // removed the image first and the read finds nothing.
-    await updateImageUse(deps.db, 'name', names, clock.now());
+    for (const candidate of names) {
+      const image = await resolveImageName(candidate);
 
-    const image =
-      name === undefined ? await readDefaultImage() : await readImageByName(deps.db, name);
-
-    if (image === undefined) {
-      throw buildNotFoundError('image', name ?? deps.config.defaultImage);
+      if (image !== undefined) {
+        return image;
+      }
     }
 
-    return image;
+    throw buildNotFoundError('image', name ?? deps.config.defaultImage);
+  };
+
+  const requireUnaliasedImage = async (image: ImageRecord): Promise<void> => {
+    const found = await listImageAliases(deps.db, [image.id]);
+
+    const aliases = found.get(image.id) ?? [];
+
+    if (aliases.length > 0) {
+      throw buildConflictError(
+        'image',
+        image.name,
+        `image ${image.name} is pointed at by alias ${aliases.join(', ')}; remove ${aliases.length === 1 ? 'it' : 'them'} with image unalias first`,
+      );
+    }
   };
 
   return {
@@ -170,8 +213,17 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
         throw buildConflictError('image', name, `image ${name} is used by ${String(users)} imp(s)`);
       }
 
+      await requireUnaliasedImage(image);
+
       await deps.storageGate.join(async () => {
-        await removeImage(deps.db, image.id);
+        // an alias set after the check above stops the delete on its foreign key
+        await removeImage(deps.db, image.id).catch(async (error: unknown) => {
+          if (isForeignKeyError(error)) {
+            await requireUnaliasedImage(image);
+          }
+
+          throw error;
+        });
 
         const isRemoved = await writer.removeIdleRootfs(image.digest);
 
@@ -196,6 +248,31 @@ export function createImageService(deps: ImageServiceDeps): ImageService {
       throw buildNotFoundError('image', name);
     },
     resolveImage,
+    updateImageAlias: async (alias, imageName) => {
+      const image = await updateImageAlias(deps.db, alias, imageName, clock.now());
+
+      if (image !== undefined) {
+        return image;
+      }
+
+      const target = await readImageByName(deps.db, imageName);
+
+      if (target === undefined) {
+        throw buildNotFoundError('image', imageName);
+      }
+
+      throw buildConflictError(
+        'image',
+        alias,
+        `alias ${alias} is the name of an image; pick another alias`,
+      );
+    },
+    removeImageAlias: async (alias) => {
+      if (!(await removeImageAlias(deps.db, alias))) {
+        throw buildNotFoundError('image alias', alias);
+      }
+    },
+    listImageAliases: (imageIds) => listImageAliases(deps.db, imageIds),
     findDefaultImage: readDefaultImage,
     runImageEviction: runEviction,
     withImagePublisher: writer.withPublisher,

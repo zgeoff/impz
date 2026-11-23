@@ -7592,6 +7592,14 @@
             "pinned": {
               "default": false,
               "type": "boolean"
+            },
+            "aliases": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,30}$"
+              }
             }
           },
           "required": [
@@ -7602,7 +7610,8 @@
             "source",
             "createdAt",
             "sizeBytes",
-            "pinned"
+            "pinned",
+            "aliases"
           ],
           "additionalProperties": false
         }
@@ -7683,6 +7692,14 @@
           "pinned": {
             "default": false,
             "type": "boolean"
+          },
+          "aliases": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            }
           }
         },
         "required": [
@@ -7693,7 +7710,8 @@
           "source",
           "createdAt",
           "sizeBytes",
-          "pinned"
+          "pinned",
+          "aliases"
         ],
         "additionalProperties": false
       },
@@ -7760,6 +7778,14 @@
           "pinned": {
             "default": false,
             "type": "boolean"
+          },
+          "aliases": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            }
           }
         },
         "required": [
@@ -7770,7 +7796,8 @@
           "source",
           "createdAt",
           "sizeBytes",
-          "pinned"
+          "pinned",
+          "aliases"
         ],
         "additionalProperties": false
       },
@@ -7910,6 +7937,14 @@
                   "pinned": {
                     "default": false,
                     "type": "boolean"
+                  },
+                  "aliases": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                    }
                   }
                 },
                 "required": [
@@ -7920,7 +7955,8 @@
                   "source",
                   "createdAt",
                   "sizeBytes",
-                  "pinned"
+                  "pinned",
+                  "aliases"
                 ],
                 "additionalProperties": false
               }
@@ -8075,6 +8111,14 @@
                   "pinned": {
                     "default": false,
                     "type": "boolean"
+                  },
+                  "aliases": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]{0,30}$"
+                    }
                   }
                 },
                 "required": [
@@ -8085,7 +8129,8 @@
                   "source",
                   "createdAt",
                   "sizeBytes",
-                  "pinned"
+                  "pinned",
+                  "aliases"
                 ],
                 "additionalProperties": false
               }
@@ -8227,6 +8272,14 @@
           "pinned": {
             "default": false,
             "type": "boolean"
+          },
+          "aliases": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            }
           }
         },
         "required": [
@@ -8237,7 +8290,8 @@
           "source",
           "createdAt",
           "sizeBytes",
-          "pinned"
+          "pinned",
+          "aliases"
         ],
         "additionalProperties": false
       },
@@ -8291,6 +8345,14 @@
           "pinned": {
             "default": false,
             "type": "boolean"
+          },
+          "aliases": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            }
           }
         },
         "required": [
@@ -8301,8 +8363,107 @@
           "source",
           "createdAt",
           "sizeBytes",
-          "pinned"
+          "pinned",
+          "aliases"
         ],
+        "additionalProperties": false
+      },
+      "stream": false
+    },
+    "images.alias": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+          },
+          "image": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+          }
+        },
+        "required": [
+          "alias",
+          "image"
+        ]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "oci",
+              "imp"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pinned": {
+            "default": false,
+            "type": "boolean"
+          },
+          "aliases": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,30}$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ref",
+          "digest",
+          "source",
+          "createdAt",
+          "sizeBytes",
+          "pinned",
+          "aliases"
+        ],
+        "additionalProperties": false
+      },
+      "stream": false
+    },
+    "images.unalias": {
+      "input": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,30}$"
+          }
+        },
+        "required": [
+          "alias"
+        ]
+      },
+      "output": {
+        "type": "object",
+        "properties": {},
         "additionalProperties": false
       },
       "stream": false
@@ -14838,6 +14999,9 @@
               "imagePins": {
                 "type": "boolean"
               },
+              "imageAliases": {
+                "type": "boolean"
+              },
               "buildContextUpload": {
                 "type": "boolean"
               },
@@ -15041,6 +15205,9 @@
                 "type": "boolean"
               },
               "imagePins": {
+                "type": "boolean"
+              },
+              "imageAliases": {
                 "type": "boolean"
               },
               "buildContextUpload": {

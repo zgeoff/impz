@@ -9,6 +9,7 @@ import type { StartTimer } from '../../../platform/process/start-timer';
 import { AgentWaitError } from '../../../vm/agent-client/agent-wait-error';
 import type { ImpsConfig } from '../../imps-config';
 import type { ImpService } from '../../imps/imp-service';
+import type { ImageService } from '../image-service';
 import { createGuestExec } from './guest-exec';
 import type { GuestExec } from './guest-exec';
 
@@ -42,6 +43,7 @@ export interface BuildersDeps {
   readonly config: Pick<ImpsConfig, 'build'>;
   readonly db: ImpDatabase;
   readonly imps: Pick<ImpService, 'createImp' | 'destroyImpId' | 'openBuilderExec'>;
+  readonly images: Pick<ImageService, 'resolveImage'>;
 
   readonly ensureImage: (signal: AbortSignal) => Promise<void>;
 
@@ -131,7 +133,7 @@ export function createBuilders(deps: BuildersDeps): Builders {
         await deps.imps.createImp({
           id,
           name,
-          image: BUILDER_IMAGE,
+          image: await deps.images.resolveImage(BUILDER_IMAGE),
           memoryMib: deps.config.build.memoryMib,
           maxMemoryMib: deps.config.build.maxMemoryMib ?? undefined,
           diskMib: Math.ceil(deps.config.build.diskBytes / 1024 ** 2),

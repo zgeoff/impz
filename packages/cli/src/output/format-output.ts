@@ -26,6 +26,7 @@ import type {
   Token,
 } from '@impz/api';
 import { formatBytes, formatDuration, formatMib } from '@impz/shared';
+import { getImageAliases } from '../image/get-image-aliases';
 
 export type Row = readonly string[];
 
@@ -192,9 +193,10 @@ export function formatServices(services: readonly Readonly<Service>[]): string {
 
 export function formatImages(images: readonly Image[]): string {
   return formatTable(
-    ['NAME', 'REF', 'DIGEST', 'SIZE', 'PINNED'],
+    ['NAME', 'ALIASES', 'REF', 'DIGEST', 'SIZE', 'PINNED'],
     images.map((image) => [
       image.name,
+      getImageAliases(image).join(',') || '-',
       image.ref,
       image.digest.slice(0, 19),
       `${String(Math.round(image.sizeBytes / 1_048_576))} MiB`,

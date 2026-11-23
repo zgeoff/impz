@@ -1,5 +1,6 @@
 import { readImageByName } from '../../platform/db/create-image';
 import type { ImpDatabase } from '../../platform/db/open-database';
+import { probeImageAlias } from '../../platform/db/update-image-alias';
 import { buildConflictError } from '../../platform/errors/build-not-found-error';
 import { buildDigestTag } from './build-digest-tag';
 
@@ -8,23 +9,33 @@ export async function resolveImportedImageName(
   name: string,
   digest: string,
 ): Promise<string> {
-  const taken = await readImageByName(db, name);
+  const isTaken = await probeNameTaken(db, name);
 
-  if (taken === undefined) {
+  if (!isTaken) {
     return name;
   }
 
   const fallback = `${name.slice(0, 22)}-${buildDigestTag(digest)}`;
 
-  const fallbackTaken = await readImageByName(db, fallback);
+  const isFallbackTaken = await probeNameTaken(db, fallback);
 
-  if (fallbackTaken !== undefined) {
+  if (isFallbackTaken) {
     throw buildConflictError(
       'image',
       fallback,
-      `images ${name} and ${fallback} both exist; remove one to import this image`,
+      `images ${name} and ${fallback} both exist, or an alias holds one of them; remove one to import this image`,
     );
   }
 
   return fallback;
+}
+
+async function probeNameTaken(db: ImpDatabase, name: string): Promise<boolean> {
+  const image = await readImageByName(db, name);
+
+  if (image !== undefined) {
+    return true;
+  }
+
+  return probeImageAlias(db, name);
 }

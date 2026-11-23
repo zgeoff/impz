@@ -51,11 +51,29 @@ async function setupTest() {
     reserveBytes: null,
   });
 
+  const storage = createXfsBackend({ dataDir });
+
+  const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    config: loadConfig({ IMP_DATA_DIR: dataDir }),
+    db,
+    storage,
+    storageGate: createStorageGate(),
+    diskBudget,
+    readBuilders: () => null,
+    clock: { now: () => 5000 },
+  });
+
   return {
     dataDir,
     db,
-    storage: createXfsBackend({ dataDir }),
+    storage,
     diskBudget,
+    images,
   };
 }
 
@@ -1247,4 +1265,261 @@ test('#removeImage keeps a record of the rootfs while a publisher of its digest 
   });
 
   expect(removals).toStrictEqual(['sha256:1']);
+});
+
+test('#resolveImage returns an alias’s target and bumps its last use in the same statement', async () => {
+  const ctx = await setupTest();
+  const created = await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }), 1000);
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  const image = await ctx.images.resolveImage('agent');
+  const uses = await listImageUses(ctx.db);
+
+  expect(image).toStrictEqual(created);
+  expect(uses.map((use) => use.lastUsedAt)).toStrictEqual([5000]);
+});
+
+test('#resolveImage prefers an image of the name over an alias', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  expect(ctx.images.resolveImage('base-1')).resolves.toMatchObject({ name: 'base-1' });
+});
+
+test('#resolveImage answers NOT_FOUND for a name that is neither an image nor an alias', async () => {
+  const ctx = await setupTest();
+
+  expect(ctx.images.resolveImage('agent')).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+    message: 'image agent not found',
+  });
+});
+
+test('#resolveImage answers NOT_FOUND for an alias that was removed', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+  await ctx.images.removeImageAlias('agent');
+
+  expect(ctx.images.resolveImage('agent')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+});
+
+test('#updateImageAlias moving an alias changes later creates and leaves existing imps', async () => {
+  const ctx = await setupTest();
+  const older = await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+  const newer = await createImage(ctx.db, buildMockNewImage({ name: 'base-2' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  const before = await ctx.images.resolveImage('agent');
+
+  await ctx.images.updateImageAlias('agent', 'base-2');
+
+  const after = await ctx.images.resolveImage('agent');
+
+  expect([before.id, after.id]).toStrictEqual([older.id, newer.id]);
+});
+
+test('#resolveImage resolves the default image name as an alias', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_DEFAULT_IMAGE: 'agent' }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  const created = await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await images.updateImageAlias('agent', 'base-1');
+
+  expect(images.resolveImage()).resolves.toStrictEqual(created);
+});
+
+test('#resolveImage falls back to the built-in default image when the configured name is neither an image nor an alias', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_DEFAULT_IMAGE: 'agent' }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  const created = await createImage(ctx.db, buildMockNewImage({ name: 'ubuntu' }));
+
+  expect(images.resolveImage()).resolves.toStrictEqual(created);
+});
+
+test('#findDefaultImage finds the image the default image name is an alias for', async () => {
+  const ctx = await setupTest();
+
+  const images = createImageService({
+    runCommand,
+    startTar: startTarProcess,
+    startTimer: startRealTimer,
+    countTreeBytes,
+    runStreamed,
+    config: loadConfig({ IMP_DATA_DIR: ctx.dataDir, IMP_DEFAULT_IMAGE: 'agent' }),
+    db: ctx.db,
+    storage: ctx.storage,
+    storageGate: createStorageGate(),
+    diskBudget: ctx.diskBudget,
+    readBuilders: () => null,
+  });
+
+  const created = await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await images.updateImageAlias('agent', 'base-1');
+
+  expect(images.findDefaultImage()).resolves.toStrictEqual(created);
+});
+
+test('#updateImageAlias returns the image it already points at', async () => {
+  const ctx = await setupTest();
+  const created = await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  expect(ctx.images.updateImageAlias('agent', 'base-1')).resolves.toStrictEqual(created);
+});
+
+test('#updateImageAlias leaves the last use of the target alone', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }), 1000);
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  const uses = await listImageUses(ctx.db);
+
+  expect(uses.map((use) => use.lastUsedAt)).toStrictEqual([1000]);
+});
+
+test('#updateImageAlias lets one image hold several aliases', async () => {
+  const ctx = await setupTest();
+  const created = await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('stable', 'base-1');
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  const aliases = await ctx.images.listImageAliases([created.id]);
+
+  expect(aliases.get(created.id)).toStrictEqual(['agent', 'stable']);
+});
+
+test('#updateImageAlias alias refuses an image’s name', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-2' }));
+
+  expect(ctx.images.updateImageAlias('base-2', 'base-1')).rejects.toMatchObject({
+    code: 'CONFLICT',
+  });
+});
+
+test('#updateImageAlias answers NOT_FOUND for an image that does not exist', async () => {
+  const ctx = await setupTest();
+
+  expect(ctx.images.updateImageAlias('agent', 'missing')).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+    message: 'image missing not found',
+  });
+});
+
+test('#updateImageAlias answers NOT_FOUND for an image that is an alias', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  expect(ctx.images.updateImageAlias('stable', 'agent')).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+  });
+});
+
+test('#removeImageAlias answers NOT_FOUND for an alias that does not exist', async () => {
+  const ctx = await setupTest();
+
+  expect(ctx.images.removeImageAlias('agent')).rejects.toMatchObject({
+    code: 'NOT_FOUND',
+    message: 'image alias agent not found',
+  });
+});
+
+test('#addImage refuses a name an alias holds, before any pull', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  expect(ctx.images.addImage('busybox', 'agent')).rejects.toMatchObject({ code: 'CONFLICT' });
+});
+
+test('#buildImageFromContext refuses a name an alias holds, before any build', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  const building = ctx.images.buildImageFromContext('/missing.tar', 'agent', undefined, {
+    signal: new AbortController().signal,
+  });
+
+  expect(building).rejects.toMatchObject({ code: 'CONFLICT' });
+});
+
+test('#removeImage refuses an image an alias points at, and names the alias', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('stable', 'base-1');
+  await ctx.images.updateImageAlias('agent', 'base-1');
+
+  const removing = ctx.images.removeImage('base-1');
+
+  expect(removing).rejects.toMatchObject({
+    code: 'CONFLICT',
+    message: expect.stringContaining('agent, stable'),
+  });
+});
+
+test('#removeImage removes the image once its alias is gone', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('agent', 'base-1');
+  await ctx.images.removeImageAlias('agent');
+  await ctx.images.removeImage('base-1');
+
+  const image = await readImageByName(ctx.db, 'base-1');
+
+  expect(image).toBeUndefined();
 });

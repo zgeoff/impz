@@ -14,6 +14,9 @@ export const ImageSchema = z.object({
 
   // An impd older than image pins sends no pin, and pins nothing.
   pinned: z.boolean().default(false),
+
+  // sorted; an impd older than image aliases sends none
+  aliases: z.array(NameSchema).default([]),
 });
 
 export type Image = z.infer<typeof ImageSchema>;

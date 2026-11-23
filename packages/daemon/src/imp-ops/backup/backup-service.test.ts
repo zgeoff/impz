@@ -907,7 +907,8 @@ test('#restoreBackup rejects a restored image as CONFLICT when its name and its 
 
   expect(freshBackups.restoreBackup({ name: 'dev' })).rejects.toMatchObject({
     code: 'CONFLICT',
-    message: 'images base and base-base both exist; remove one to import this image',
+    message:
+      'images base and base-base both exist, or an alias holds one of them; remove one to import this image',
     data: { kind: 'image', name: 'base-base' },
   });
 });

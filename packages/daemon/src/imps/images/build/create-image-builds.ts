@@ -12,6 +12,7 @@ import {
 } from '@impz/local-tar';
 import type { Clock } from '@zgeoff/std';
 import type { ImageRecord } from '../../../platform/db/create-image';
+import type { ImpDatabase } from '../../../platform/db/open-database';
 import { ImpdError } from '../../../platform/errors/impd-error';
 import { getImpdLogger } from '../../../platform/process/get-impd-logger';
 import { buildUploadsDir } from '../../../vm/storage/build-imp-paths';
@@ -31,6 +32,7 @@ import {
 } from '../pull/pick-repo-digest';
 import type { ImageStore, Pin, PinInspect } from '../pull/pick-repo-digest';
 import { requireClientImageName } from '../require-client-image-name';
+import { requireUnaliasedName } from '../require-unaliased-name';
 import type { ImageWriter } from '../rootfs/create-image-writer';
 import { createBuildEngine, toEngineRun } from './build-engine';
 import type { BuildEngine } from './build-engine';
@@ -74,6 +76,7 @@ export interface ImageBuilds {
 
 interface ImageBuildsDeps {
   readonly config: ImpsConfig;
+  readonly db: ImpDatabase;
 
   readonly diskBudget: Pick<DiskBudget, 'withRoom'>;
 
@@ -95,6 +98,9 @@ export function createImageBuilds(deps: ImageBuildsDeps, writer: ImageWriter): I
   ): Promise<ImageRecord> => {
     const signal = options.signal;
     const imageName = requireClientImageName(name);
+
+    await requireUnaliasedName(deps.db, imageName);
+
     const tag = `imp/${imageName}:latest`;
     const tarBytes = statSync(tarPath).size;
     const dockerfilePath = normalizeDockerfilePath(givenDockerfile);

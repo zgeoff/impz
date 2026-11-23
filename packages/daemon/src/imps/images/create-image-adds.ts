@@ -17,6 +17,7 @@ import { BUILDER_IMAGE } from './builders/create-builders';
 import type { Builders } from './builders/create-builders';
 import { deriveImageName } from './derive-image-name';
 import { requireClientImageName } from './require-client-image-name';
+import { requireUnaliasedName } from './require-unaliased-name';
 import { requireDockerImage } from './rootfs/create-image-writer';
 import type { ImageWriter } from './rootfs/create-image-writer';
 
@@ -132,6 +133,8 @@ export function createImageAdds(deps: ImageAddsDeps, writer: ImageWriter): Image
 
     const givenName = name ?? deriveImageName(ref);
     const imageName = isImpds ? NameSchema.parse(givenName) : requireClientImageName(givenName);
+
+    await requireUnaliasedName(deps.db, imageName);
 
     const taken = await readImageByName(deps.db, imageName);
 

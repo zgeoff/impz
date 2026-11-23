@@ -190,6 +190,7 @@ An eviction never removes these images:
 - an image that an imp uses, or that an imp disk or a template still shares blocks with
 - the default image of `IMP_DEFAULT_IMAGE`
 - a pinned image
+- an image that an alias points at
 - an image used within the last hour, because an imp create, a restore or a move may be about to use
   it
 
@@ -215,6 +216,33 @@ INFO impd.image image eviction: removed web-0a1b2c3 (1.5 GiB, last used 2026-09-
 impd records the rootfs of each image it removes, by eviction or by `impz image rm`, until the
 rootfs is gone. When that removal fails, or impd stops first, impd removes the rootfs after the next
 image add, image build or template.
+
+## Aliases
+
+An image alias is a second name for one image. `impz new --image agent` makes an imp from the image
+that the alias `agent` points at, so a client that names the alias keeps working when you build a
+newer image:
+
+```sh
+impz image alias agent agent-3f9c2a1
+impz image alias agent agent-77b01de
+impz image unalias agent
+```
+
+The second command moves the alias. Only imps made afterwards get the newer image: an imp keeps the
+image it was made from and reports that image's own name. `impz image ls` shows the aliases of each
+image in the ALIASES column. `IMP_DEFAULT_IMAGE` may name an alias.
+
+- An alias points at an image name, never at another alias, and one image may hold several aliases.
+- An alias and an image never share a name. `impz image alias` refuses the name of an image, and an
+  image add, build, template or import whose name an alias holds fails, or for an import falls back
+  to the name with a digest suffix.
+- `impz image rm` refuses an image that an alias points at and names the alias. Remove the alias
+  first.
+- Aliases belong to one host. A move or a restore carries none.
+- An alias needs a host-wide `manage` token. impd gives a token limited to some imps no alias call.
+- A client that places an imp on one of several hosts accepts a host that has the image by name or
+  by alias, so the same alias may point at different images on different hosts.
 
 ## Isolated builds
 

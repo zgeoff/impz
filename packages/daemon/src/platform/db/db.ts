@@ -94,6 +94,12 @@ export interface Grants {
   secret_name: string;
 }
 
+export interface ImageAliases {
+  image_id: string;
+  name: string;
+  updated_at: number;
+}
+
 export interface ImageRemovals {
   created_at: number;
   digest: string;
@@ -458,6 +464,7 @@ export interface DB {
   event_log_outside_writes: EventLogOutsideWrites;
   events: Events;
   grants: Grants;
+  image_aliases: ImageAliases;
   image_removals: ImageRemovals;
   images: Images;
   imp_cold_boots: ImpColdBoots;

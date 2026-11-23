@@ -1,10 +1,11 @@
-import type { ImageBuildPhase } from '@impz/api';
+import type { Image, ImageBuildPhase } from '@impz/api';
 import { getErrorMessage } from '@impz/shared';
 import { ORPCError } from '@orpc/server';
 import invariant from 'tiny-invariant';
 import { runImageOp } from '../imps/images/build/run-image-op';
 import type { ImageOpStreamOptions } from '../imps/images/build/run-image-op';
 import { findImpName } from '../platform/audit/api-audit';
+import type { ImageRecord } from '../platform/db/create-image';
 import { ImpdError } from '../platform/errors/impd-error';
 import { mergeSignals } from '../platform/process/merge-signals';
 import type { AuditDetail, RpcContext, RpcImplementer } from './create-implementer';
@@ -12,11 +13,18 @@ import type { RouterDeps } from './create-router';
 import { toApiImage } from './to-api-image';
 
 export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
+  const readApiImage = async (image: ImageRecord): Promise<Image> => {
+    const aliases = await deps.images.listImageAliases([image.id]);
+
+    return toApiImage(image, aliases.get(image.id) ?? []);
+  };
+
   return {
     list: os.images.list.handler(async () => {
       const images = await deps.images.listImages();
+      const aliases = await deps.images.listImageAliases(images.map((image) => image.id));
 
-      return images.map((image) => toApiImage(image));
+      return images.map((image) => toApiImage(image, aliases.get(image.id) ?? []));
     }),
     add: os.images.add.handler(async (context) => {
       const input = context.input;
@@ -31,7 +39,7 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
           ? await deps.templates.createTemplate(input.imp, input.name)
           : await deps.images.addImage(input.ref, input.name, { signal, onResolved });
 
-      return toApiImage(image);
+      return readApiImage(image);
     }),
     addStream: os.images.addStream.handler((context) => {
       const input = context.input;
@@ -52,7 +60,7 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
                   onResolved,
                 });
 
-          return toApiImage(image);
+          return readApiImage(image);
         },
         buildImageOpOptions(deps, context, 'images.addStream', firstPhase),
       );
@@ -93,7 +101,7 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
                 },
               );
 
-              return toApiImage(image);
+              return readApiImage(image);
             } finally {
               upload.release();
             }
@@ -115,7 +123,7 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
             },
           );
 
-          return toApiImage(image);
+          return readApiImage(image);
         }),
         { ...buildImageOpOptions(deps, context, 'images.buildStream', 'pack'), logs },
       );
@@ -129,7 +137,7 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
         { ...(context.signal !== undefined && { signal: context.signal }) },
       );
 
-      return toApiImage(image);
+      return readApiImage(image);
     }),
     delete: os.images.delete.handler(async (context) => {
       await deps.images.removeImage(context.input.name);
@@ -143,7 +151,7 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
         findPinRefPrefix(context.context.caller),
       );
 
-      return toApiImage(image);
+      return readApiImage(image);
     }),
     unpin: os.images.unpin.handler(async (context) => {
       const image = await deps.images.updateImagePin(
@@ -152,7 +160,17 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
         findPinRefPrefix(context.context.caller),
       );
 
-      return toApiImage(image);
+      return readApiImage(image);
+    }),
+    alias: os.images.alias.handler(async (context) => {
+      const image = await deps.images.updateImageAlias(context.input.alias, context.input.image);
+
+      return readApiImage(image);
+    }),
+    unalias: os.images.unalias.handler(async (context) => {
+      await deps.images.removeImageAlias(context.input.alias);
+
+      return {};
     }),
   };
 }

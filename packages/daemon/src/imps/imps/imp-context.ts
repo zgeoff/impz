@@ -35,7 +35,6 @@ import type { MemoryWarm } from '../../vm/vmm/create-memory-warm';
 import { readCpuTicks } from '../../vm/vmm/read-vm-memory';
 import type { VmRunner } from '../../vm/vmm/vm-runner';
 import type { BrokerExecEnv } from '../exec/broker-exec-env';
-import type { ImageService } from '../images/image-service';
 import type { ImpsConfig } from '../imps-config';
 import { buildActivityTracker } from './activity-tracker';
 import type { ActivityTracker } from './activity-tracker';
@@ -73,7 +72,6 @@ interface SleepTiming {
 export interface ImpServiceDeps {
   readonly config: ImpsConfig;
   readonly db: ImpDatabase;
-  readonly images: ImageService;
   readonly taps: TapDevices;
   readonly vms: VmRunner;
   readonly storage: StorageBackend;
@@ -159,7 +157,6 @@ export interface ImpClock {
 }
 
 export interface ImpVms {
-  readonly images: ImageService;
   readonly taps: TapDevices;
   readonly vms: VmRunner;
   readonly storage: StorageBackend;
@@ -251,7 +248,6 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
   };
 
   const vms: ImpVms = {
-    images: deps.images,
     taps: deps.taps,
     vms: deps.vms,
     storage: deps.storage,

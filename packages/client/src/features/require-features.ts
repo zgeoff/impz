@@ -32,6 +32,7 @@ const FEATURE_GAPS = {
   execDropSysAdmin: 'cannot drop CAP_SYS_ADMIN from a command',
   guestScratch: 'does not name the guest scratch folder',
   imagePins: 'has no image pins',
+  imageAliases: 'has no image aliases',
   buildContextUpload: 'has no build context upload',
   destroyIdCheck: 'has no id check on destroy',
   eventCursor: 'has no event cursor',

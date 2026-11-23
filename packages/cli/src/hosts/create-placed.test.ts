@@ -1,7 +1,11 @@
-import { expect, mock, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { ORPCError } from '@impz/client';
+import { createImage } from '@impz/daemon/test-utils';
+import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
+import { TEST_TOKEN } from '@impz/testing/test-token';
+import { createImpClient } from '../config/create-imp-client';
 import { buildMockHostProbe } from '../test-utils/build-mock-host-probe';
-import { buildRanking, createPlaced } from './create-placed';
+import { buildRanking, createPlaced, readHostProbe } from './create-placed';
 
 test('#buildRanking ranks the host with the most free RAM first, a tie in name order', () => {
   const ram = {
@@ -970,4 +974,52 @@ test('#createPlaced rejects an empty ranking without a create', () => {
   );
 
   expect(create).not.toHaveBeenCalled();
+});
+
+test('#readHostProbe lists the names and the aliases of the images of a host', async () => {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const harness = await startTestImpd(stack);
+
+  await createImage(harness.db, {
+    name: 'base-1',
+    ref: 'imp/base:1',
+    digest: 'sha256:1',
+    sizeBytes: 1,
+  });
+
+  await harness.client.images.alias({ alias: 'agent', image: 'base-1' });
+
+  const client = createImpClient({ url: harness.url, token: TEST_TOKEN });
+
+  const probe = await readHostProbe(client, new AbortController().signal, {
+    name: null,
+    image: 'agent',
+    memoryMib: null,
+    cpuLimit: null,
+    policyMode: null,
+    networks: [],
+    needsWholeHost: false,
+  });
+
+  expect(probe.images).toStrictEqual(['base-1', 'agent']);
+});
+
+test('#buildRanking keeps a host that holds an alias of the image asked for', () => {
+  const ranking = buildRanking(
+    [{ host: 'has', value: buildMockHostProbe({ images: ['base-1', 'agent'] }) }],
+    {
+      name: 'dev',
+      image: 'agent',
+      memoryMib: null,
+      cpuLimit: null,
+      policyMode: null,
+      networks: [],
+      needsWholeHost: false,
+    },
+  );
+
+  expect(ranking.dropped).toStrictEqual([]);
 });

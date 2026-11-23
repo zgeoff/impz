@@ -44,6 +44,8 @@ import { createFakeClock } from '@zgeoff/testing/clock';
 import { claimFreePorts } from '@zgeoff/testing/process';
 import invariant from 'tiny-invariant';
 import { TEST_TOKEN } from '../test-token';
+import { buildImpsWithResolvedImages } from './build-imps-with-resolved-images';
+import type { SeedImps } from './build-imps-with-resolved-images';
 import { readNoTailscale } from './network/read-no-tailscale';
 import { buildStubTickerTimer } from './platform/build-stub-ticker-timer';
 import { formatRunPrefix } from './platform/format-run-prefix';
@@ -114,6 +116,8 @@ const NO_FREEZER = { freeze: () => Promise.resolve(), thaw: () => Promise.resolv
 // a kernel release that keeps KSM's merge flag
 const KSM_KERNEL = '6.12.0';
 const IDLE_KSM: KsmHostStats = { running: true, sharedMib: 0, profitMib: 0, zeroMib: 0 };
+
+type SeededImpd = Omit<Impd, 'imps'> & { readonly imps: SeedImps<Impd['imps']> };
 
 export async function startTestImpd(
   stack: Readonly<AsyncDisposableStack>,
@@ -429,6 +433,21 @@ export async function startTestImpd(
   };
 
   const current = { impd: await startImpd(host.identity, fake.startGeneration()) };
+
+  const seededImpds = new WeakMap<Impd, SeededImpd>();
+
+  // a test creates an imp from an image name, or from none for the default image
+  const buildImpdWithResolvedImages = (impd: Impd): SeededImpd => {
+    const seeded = seededImpds.get(impd) ?? {
+      ...impd,
+      imps: buildImpsWithResolvedImages(impd.imps, impd.images),
+    };
+
+    seededImpds.set(impd, seeded);
+
+    return seeded;
+  };
+
   const sendRequest = (request: Request) => current.impd.api.app.handle(request);
 
   const buildClient = (token: string): ContractRouterClient<ImpContract> =>
@@ -499,11 +518,11 @@ export async function startTestImpd(
     get url(): string {
       return `http://127.0.0.1:${String(current.impd.app.server?.port)}`;
     },
-    get impd(): Impd {
-      return current.impd;
+    get impd(): SeededImpd {
+      return buildImpdWithResolvedImages(current.impd);
     },
     get imps() {
-      return current.impd.imps;
+      return buildImpdWithResolvedImages(current.impd).imps;
     },
     get governor() {
       return current.impd.governor;
@@ -546,7 +565,7 @@ export async function startTestImpd(
     },
 
     // the old impd stops as a crash would leave it
-    restartImpd: async (identity: HostIdentity = host.identity): Promise<Impd> => {
+    restartImpd: async (identity: HostIdentity = host.identity): Promise<SeededImpd> => {
       // first, so a hung call the stop releases parks instead of finishing
       const runner = fake.startGeneration();
 
@@ -556,7 +575,7 @@ export async function startTestImpd(
 
       current.impd = await startImpd(identity, runner);
 
-      return current.impd;
+      return buildImpdWithResolvedImages(current.impd);
     },
   };
 }

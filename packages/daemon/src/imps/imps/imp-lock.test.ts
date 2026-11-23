@@ -17,8 +17,6 @@ async function setupTest() {
   const context = createImpContext({
     config: harness.config,
     db: harness.db,
-    images: harness.images,
-
     taps: { setupTap: () => Promise.resolve(), removeTap: () => Promise.resolve() },
     admission: { admit: () => Promise.resolve(), release: () => {} },
     vms: harness.fake.startGeneration(),

@@ -52,7 +52,7 @@ export interface RestoreDeps {
     StorageBackend,
     'createImage' | 'createCheckpoint' | 'createImpDisk' | 'resolveImpPaths'
   >;
-  readonly images: Pick<ImageService, 'withImagePublisher'>;
+  readonly images: Pick<ImageService, 'withImagePublisher' | 'resolveImage'>;
   readonly restic: Pick<Restic, 'unlock' | 'listSnapshots' | 'dump' | 'restore'>;
   readonly paths: Pick<ReturnType<typeof buildBackupPaths>, 'tree' | 'restoreDir'>;
   readonly storageGate: Pick<StorageGate, 'join'>;
@@ -374,7 +374,7 @@ async function createRestoredImp(
       ...(imp.clonedDigest !== undefined && { imageDigest: imp.clonedDigest }),
       name: target.name,
       networkIds: networks.ids,
-      image: target.image,
+      image: await deps.images.resolveImage(target.image),
       vcpus: imp.vcpus,
       memoryMib: imp.memoryMib,
       maxMemoryMib: imp.maxMemoryMib ?? undefined,

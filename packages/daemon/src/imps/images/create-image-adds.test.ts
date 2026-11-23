@@ -99,6 +99,7 @@ test('it adds an image through a builder for one platform, with no host engine c
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -179,6 +180,7 @@ test('it logs the pull and image times of an add on its clock', async () => {
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -224,6 +226,7 @@ test('it adds an image through a builder, with no host engine call, under a left
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -272,6 +275,7 @@ test('it returns a failed pull in the builder as the client error', async () => 
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -321,6 +325,7 @@ test("it returns a registry's refusal of a pull in the builder as the client err
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -365,6 +370,7 @@ test('it leaves no builder, row or work directory after a failed pull', async ()
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -426,6 +432,7 @@ test('it refuses an export over IMP_BUILD_IMAGE_MAX_MIB', async () => {
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -470,6 +477,7 @@ test('it leaves no builder, row or work directory after an export over the limit
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -536,6 +544,7 @@ test("it changes no host file through an added image's image.json link", async (
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -588,6 +597,7 @@ test('it ends the pull in the builder, and the builder, when the client goes', a
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -647,6 +657,7 @@ test.each([
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -693,6 +704,7 @@ test('it fails the add of a builder the governor refuses, with no host engine ca
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -747,6 +759,7 @@ test('it boots an elastic builder on ordinary pages when the free huge page pool
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -798,6 +811,7 @@ test('it boots a fixed builder on the huge page pool with no IMP_BUILD_MAX_MEMOR
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -855,6 +869,7 @@ test('it adds an image whose name matches IMP_PRIORITY_IMPS from the RAM kept fo
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -916,6 +931,7 @@ test('it refuses with RAM_BUDGET_EXCEEDED the add of an image outside IMP_PRIORI
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -951,6 +967,7 @@ test('it fails the add with SERVICE_UNAVAILABLE when the registry cannot give th
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -989,6 +1006,7 @@ test('it asks the registry only for the builder image config when it cannot give
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1050,6 +1068,7 @@ test('it adds a bumped IMP_BUILD_IMAGE once, by its digest, and moves the row', 
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1110,6 +1129,7 @@ test('it seeds the default image at first start through a builder', async () => 
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1157,6 +1177,7 @@ test('it seeds the default image at the next start once the builder image has la
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1211,6 +1232,7 @@ test('it fails a builder image fetch that hangs at its limit, naming IMP_BUILD_I
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1274,6 +1296,7 @@ test('it exports nothing when the config fetch of the builder image hangs', asyn
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1336,6 +1359,7 @@ test('it fetches the builder image again on the add after a fetch that failed', 
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1417,6 +1441,7 @@ test('it stops the wait of a caller that goes, and the fetch it shared goes on f
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1489,6 +1514,7 @@ test('it names the error of a step after the fetch that fails past the limit, no
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1558,6 +1584,7 @@ test('it adds the builder image when mkfs.ext4 runs past the fetch limit', async
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1614,6 +1641,7 @@ test('it leaves no row, rootfs, hold or builder when the client leaves an add wh
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1684,6 +1712,7 @@ test('it leaves no new row and no rootfs when a template takes the name during a
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1747,6 +1776,7 @@ test("it keeps the other's row and rootfs when an add and a build of one digest 
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1845,6 +1875,7 @@ test('it keeps the rootfs when an image rm runs while an add of its digest is be
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1920,6 +1951,7 @@ test("it removes that rootfs after all when the add's row then fails", async () 
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 
@@ -1994,6 +2026,7 @@ test('it logs a cleanup removal that fails, and returns the add its own error', 
     config,
     db: ctx.db,
     imps: { ...ctx.impd.imps, openBuilderExec: (_name, request) => builder.guest.open(request) },
+    images: ctx.impd.images,
     ensureImage: (signal) => images.ensureBuilderImage(signal),
   });
 

@@ -94,6 +94,9 @@ const SystemFeaturesSchema = z.object({
 
   imagePins: z.boolean().optional(),
 
+  // An impd without this has no image alias or unalias call.
+  imageAliases: z.boolean().optional(),
+
   buildContextUpload: z.boolean().optional(),
 
   // An impd without this drops a destroy's `id` unread and destroys whatever

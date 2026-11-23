@@ -55,6 +55,7 @@ test('it lets a tansy-* token add tansy-x from a pinned ref under its prefix', a
     createdAt: expect.toBeValidDate(),
     sizeBytes: expect.any(Number),
     pinned: false,
+    aliases: [],
   });
 });
 
