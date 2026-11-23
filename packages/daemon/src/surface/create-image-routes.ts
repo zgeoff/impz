@@ -101,7 +101,7 @@ export function createImageRoutes(os: RpcImplementer, deps: RouterDeps) {
                 },
               );
 
-              return readApiImage(image);
+              return await readApiImage(image);
             } finally {
               upload.release();
             }

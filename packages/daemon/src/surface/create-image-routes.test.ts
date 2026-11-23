@@ -135,7 +135,7 @@ test('#images.delete refuses an aliased image and names the alias, then removes 
 
   const refused = ctx.client.images.delete({ name: 'base-1' });
 
-  await expect(refused).rejects.toMatchObject({
+  expect(refused).rejects.toMatchObject({
     code: 'CONFLICT',
     message: 'image base-1 is pointed at by alias agent; remove it with image unalias first',
   });

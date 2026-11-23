@@ -43,15 +43,14 @@ export function updateImageAlias(
       .returning('image_id')
       .executeTakeFirst();
 
-    if (written === undefined) {
-      return;
-    }
-
-    const row = await trx
-      .selectFrom('images')
-      .selectAll()
-      .where('id', '=', written.image_id)
-      .executeTakeFirst();
+    const row =
+      written === undefined
+        ? undefined
+        : await trx
+            .selectFrom('images')
+            .selectAll()
+            .where('id', '=', written.image_id)
+            .executeTakeFirst();
 
     return row === undefined ? undefined : toImageRecord(row);
   });
