@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.8.0](https://github.com/zgeoff/impz/compare/v7.7.0...v7.8.0) (2026-11-23)
+
+
+### Features
+
+* add image aliases to impd and the cli ([#1144](https://github.com/zgeoff/impz/issues/1144)) ([5a54780](https://github.com/zgeoff/impz/commit/5a54780cff8d8092cd5b05eeb51ea577b2045c39))
+
 ## [7.7.0](https://github.com/zgeoff/impz/compare/v7.6.1...v7.7.0) (2026-11-21)
 
 ### Features
