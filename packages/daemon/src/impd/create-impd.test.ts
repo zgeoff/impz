@@ -179,6 +179,20 @@ test('it warns at start that no image has the default image name', async () => {
   );
 });
 
+test('it does not warn at start when the default image name is an alias', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+
+  await ctx.images.updateImageAlias('base', 'base-1');
+
+  const lines = captureImpdLogs();
+
+  await ctx.restartImpd();
+
+  expect(lines.filter((line) => line.includes('no image named'))).toStrictEqual([]);
+});
+
 test('it removes a boot template of another host when it boots', async () => {
   updateEnv('IMP_BOOT_TEMPLATES', 'true');
 

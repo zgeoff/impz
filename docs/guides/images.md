@@ -235,8 +235,8 @@ image in the ALIASES column. `IMP_DEFAULT_IMAGE` may name an alias.
 
 - An alias points at an image name, never at another alias, and one image may hold several aliases.
 - An alias and an image never share a name. `impz image alias` refuses the name of an image, and an
-  image add, build, template or import whose name an alias holds fails, or for an import falls back
-  to the name with a digest suffix.
+  image add, build or template whose name an alias holds fails. An import in that case falls back to
+  the name with a digest suffix.
 - `impz image rm` refuses an image that an alias points at and names the alias. Remove the alias
   first.
 - Aliases belong to one host. A move or a restore carries none.
