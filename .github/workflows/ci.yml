@@ -143,7 +143,7 @@ jobs:
       # impd's port of the Dockerfile parser against the Go parser it ports,
       # at the commit behind the pinned frontend (scripts/dockerfile-difftest)
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: scripts/dockerfile-difftest/go.mod
           cache-dependency-path: scripts/dockerfile-difftest/go.sum
@@ -154,7 +154,7 @@ jobs:
       # the agent protocol's generated code and reference against its schema;
       # protoc-gen-go runs from the agent's go.mod, on that module's Go
       - name: Setup Go for the agent
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
@@ -242,7 +242,7 @@ jobs:
       # oci-fetch, uffd-handler, the Dockerfile difftest module and the UFFD
       # spike's harness
       - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: agent/go.mod
           cache-dependency-path: |
