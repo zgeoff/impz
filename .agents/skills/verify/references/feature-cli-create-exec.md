@@ -1,15 +1,13 @@
 # cli-create-exec
 
-Run this journey on the `local-kvm` target. Switch to that target first, as
-[Real VMs](local-kvm.md#switch-targets) shows. Only `local-kvm` boots the guest VM that `impz exec`
-needs.
+Run this journey on the `local-kvm` target. Before it, run `bun verify use --target local-kvm`,
+`bun verify up` and `bun verify doctor`. Only `local-kvm` boots the guest VM that `impz exec` needs.
 
 Check that a user can create an imp with `impz new`, run a command in it with `impz exec`, and
 remove it with `impz rm`. Type each command into `shell`, the terminal program in the registry: a
 bash shell with the prompt `$ `, whose `impz` is this checkout's CLI, signed in to the run's impd.
 
-Run the commands one at a time. When a command fails, first follow its row in
-[Exit codes](exit-codes.md). When a step fails or its result doesn't match the End state, run
+Run the commands one at a time. When a step gives a result that the end state doesn't expect, run
 `bun verify terminal stop`, then `bun verify action destroy-imp --name wv-cli`, so the next run
 starts with no `wv-cli`. `destroy-imp` exits 0 when the imp is already gone.
 

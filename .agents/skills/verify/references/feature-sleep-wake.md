@@ -1,15 +1,13 @@
 # sleep-wake
 
-Run this journey on the `local-kvm` target. Before you start, switch to that target as
-[Real VMs](local-kvm.md#switch-targets) shows. Only `local-kvm` boots the guest VM that `exec-imp`
-needs. Run the journey to check that a sleeping imp wakes when you run a command in it, and keeps a
-file written before the sleep.
+Run this journey on the `local-kvm` target. Before it, run `bun verify use --target local-kvm`,
+`bun verify up` and `bun verify doctor`. Only `local-kvm` boots the guest VM that `exec-imp` needs.
+Run the journey to check that a sleeping imp wakes when you run a command in it, and keeps a file
+written before the sleep.
 
-The journey's imp is `wv-sleep`. When a step fails, follow its row in [Exit codes](exit-codes.md).
-When that row has you run the command or the journey again, do so, and go on from there if it
-passes. When the step still fails, skip to the last step, `destroy-imp`, so the next run starts with
-no `wv-sleep`. `destroy-imp` exits 0 when the imp is already gone, so you may also run it before
-`create-imp` to clear a leftover.
+The journey's imp is `wv-sleep`. When a step fails, skip to the last step, `destroy-imp`, so the
+next run starts with no `wv-sleep`. `destroy-imp` exits 0 when the imp is already gone, so you may
+also run it before `create-imp` to clear a leftover.
 
 ## Journey
 

@@ -56,9 +56,7 @@ the images before the first test.
 Run a command only on a host that has everything in its Needs column. Otherwise, push your branch,
 and read the result of the row's CI job: `eval` and `vm` are in
 [`nix.yml`](../../../.github/workflows/nix.yml), the others in
-[`ci.yml`](../../../.github/workflows/ci.yml). CI runs no single journey: for that row, read the
-`e2e-group` job that runs the journey's suite. A suite outside every group never runs in CI, as
-[Sets, groups and acceptance](./references/e2e.md#sets-groups-and-acceptance) says.
+[`ci.yml`](../../../.github/workflows/ci.yml).
 
 | Tests                   | Command                                                                                | Needs                                                        | CI job         |
 | ----------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------- |
@@ -147,9 +145,8 @@ and read the result of the row's CI job: `eval` and `vm` are in
   [`startTestImpd`](../../../packages/testing/src/stand-in/start-test-impd.ts), which runs
   production's startup through `createImpd` on the stand-ins. Leave its `defaultDiskBytes` at 0: its
   stand-in storage copies each disk in full, and a 32 GiB disk takes minutes.
-- Before you move time in a test, check that the component under test takes impd's clock from
-  `createImpd`. A component that calls `Date.now()` itself stays on the wall clock. Find the check,
-  and how to give such a component a `now` parameter, in
+- Pass the stub clock of `startTestImpd` directly to each component that keeps a clock of its own.
+  Find those components, and where the clock comes from, in
   [Booting impd](./references/stand-ins.md#booting-impd).
 
 ## Host resources

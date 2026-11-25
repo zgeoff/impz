@@ -1,20 +1,14 @@
 # checkpoint-restore-fork
 
 Check that an MCP client can checkpoint an imp, restore the imp to the checkpoint, and fork the
-checkpoint into a second imp. Run this journey on the `local-kvm` target, and switch to it first as
-[Real VMs](local-kvm.md#switch-targets) shows. Only `local-kvm` boots the guest VM that
-`imp_write_file` and `imp_read_file` need.
+checkpoint into a second imp. Run this journey on the `local-kvm` target. Before it, run
+`bun verify use --target local-kvm`, `bun verify up` and `bun verify doctor`. Only `local-kvm` boots
+the guest VM that `imp_write_file` and `imp_read_file` need.
 
 `bun verify mcp call` signs in as an MCP client that impd lets touch only imps named `wv-mcp-*`.
-impd refuses any other name with `FORBIDDEN`.
-
-A step fails when its command exits non-zero, or when it exits 0 with `data.isError: true`, which
-means the tool failed. When a step exits 0 with `isError: true`, ignore the Exit codes row for 0,
-which says to go on: skip straight to the two `imp_destroy` calls and `imps list`, so the next run
-starts with neither imp. For a non-zero exit, do what its row in [Exit codes](exit-codes.md) says
-first. When that row has you run the command or the journey again, do so, and go on from there if it
-passes. When the step still fails, skip to the same destroys and `imps list`. Ignore `isError: true`
-from a destroy of an imp that never got made.
+impd refuses any other name with `FORBIDDEN`. When a step fails, skip to the two `imp_destroy`
+calls, so the next run starts with neither imp. Ignore `isError: true` from a destroy of an imp that
+never got made.
 
 ## Journey
 

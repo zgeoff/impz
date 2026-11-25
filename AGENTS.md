@@ -28,10 +28,9 @@ When you write or edit a skill:
 1. Load the `docs-writing`, `skill-writing`, `cold-read` and `deslop` skills from `.agents/skills/`.
    Install none of them yourself: repo-sync, the job that copies shared files into this repo,
    delivers them there.
-2. Do every step in the "Check it" section of `.agents/skills/skill-writing/SKILL.md`, on any host.
-   Where a step runs the chex checks, run `bun run check:docs`, which runs this repo's set of them.
-   In its last step, tick the Deslop and Cold read lines of the PR template's `## Checks` section,
-   each with the short hash of the commit you checked, and leave the chex line for CI.
+2. Do every step in the "Check it" section of `.agents/skills/skill-writing/SKILL.md`. In its last
+   step, tick the Deslop and Cold read lines of the PR template's `## Checks` section, each with the
+   short hash of the commit you checked, and leave the chex line for CI.
 
 ## Repo structure
 
@@ -130,9 +129,9 @@ ones with a catch:
   memory on this repo on a 2 GiB host. The `tsrs` package ships `tsrs-lint`, and oxlint finds it on
   its own. `lint:full` sets `TSRS_FAST=1`, tsrs's fast mode. `bun run typecheck` runs `tsrs --fast`.
   `lint:full` is CI-only: never run it locally.
-- lefthook runs the checks in [`lefthook.yml`](lefthook.yml) before a commit and a push.
-  `bun run check` runs every check, `lint:full` included, so it is CI-only too. On a 2 GiB host,
-  leave every check outside lefthook to CI, except `bun run check:docs` for a skill edit.
+- lefthook runs the checks in [`lefthook.yml`](lefthook.yml) before a commit and a push. On a 2 GiB
+  host, leave the other checks to CI. `bun run check` runs every check, `lint:full` included, so it
+  is CI-only too.
 - For the Go agent, run `gofmt -l .` and `go vet ./...` in [`agent/`](agent/). golangci-lint,
   govulncheck and the race tests in [`scripts/test-go.sh`](scripts/test-go.sh) each need more than 2
   GiB, so leave them to CI on a 2 GiB host.
