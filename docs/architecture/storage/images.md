@@ -52,6 +52,36 @@ frontend, so a Dockerfile cannot choose the frontend BuildKit runs. To pin them,
 named images in the builder before the build. These checks reject input and isolate nothing. The
 builder isolates the build.
 
+## Image aliases
+
+An alias is a second name that points at one image row, kept in its own table beside the images. A
+name that an imp create, a restore or a checkpoint fork gives resolves in this order: an image of
+that name, then an alias of that name, else not found. Only an image name can be an alias's target,
+never another alias, so a lookup follows one step. impd resolves a name once per request and passes
+the image record on, because a name resolved twice could name two images when an alias moves in
+between. An imp therefore keeps the image it was created from, and a moved alias changes only the
+imps made after it.
+
+Alias names and image names never overlap, because a client must not get a different image for one
+name depending on which table answers. Every write that creates an image row checks the alias table
+in the same transaction as the insert, so an alias set during a long build makes the build fail
+instead of shadowing the new image. An alias set checks the image table in the same statement as its
+write.
+
+An alias keeps its image from removal:
+
+- Eviction never picks an image that an alias points at, however old or idle it is. The statement
+  that removes an unused image also checks the alias table, so an alias set between eviction's pick
+  and its delete keeps the image.
+- `images.delete` refuses an aliased image and names each alias. The alias table's foreign key to
+  the image has no cascade, so a delete that races an alias set fails on the key and gets the same
+  answer.
+
+Resolving an alias reads the target and records its use in one statement, so an eviction either sees
+the use and keeps the image, or removed the image first and the lookup finds nothing. Setting or
+moving an alias leaves the target's last use alone. An alias belongs to one host: a move or a
+restore carries the image and no alias, and an import treats an alias name as a taken name.
+
 ## Template images
 
 A template image is an image made from an imp's disk. impd freezes the guest as for a checkpoint and

@@ -11,6 +11,7 @@ test('it builds a default image use of an unpinned oci image no imp uses', () =>
     lastUsedAt: expect.toBeWithin(0, Date.now()),
     impCount: 0,
     isPinned: false,
+    isAliased: false,
   });
 });
 
@@ -35,5 +36,6 @@ test('it applies overrides on top of the defaults', () => {
     lastUsedAt: 5,
     impCount: 2,
     isPinned: true,
+    isAliased: false,
   });
 });

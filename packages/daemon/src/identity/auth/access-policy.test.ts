@@ -425,6 +425,8 @@ test.each([
   ['backups.restore'],
   ['tokens.create'],
   ['images.builds'],
+  ['images.alias'],
+  ['images.unalias'],
 ])('#checkAccess refuses the host-wide call %s to a caller with patterns', async (path) => {
   const caller = buildMockCaller({ imps: ['dev-*'] });
 

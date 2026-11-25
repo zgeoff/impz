@@ -70,6 +70,7 @@ function isEvictable(state: Readonly<EvictionState>, use: Readonly<ImageUse>): b
   return (
     use.impCount === 0 &&
     !use.isPinned &&
+    !use.isAliased &&
     !state.keptNames.has(use.name) &&
     state.now - use.lastUsedAt >= RECENT_USE_MS
   );

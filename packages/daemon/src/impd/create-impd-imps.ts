@@ -119,7 +119,6 @@ export function createImpdImps(
   const serviceDeps: ImpServiceDeps = {
     config,
     db: deps.db,
-    images: parts.storage.images,
     taps: deps.taps ?? createTapDevices(),
     vms,
     storage: deps.storage,

@@ -575,6 +575,9 @@
               "imagePins": {
                 "type": "boolean"
               },
+              "imageAliases": {
+                "type": "boolean"
+              },
               "buildContextUpload": {
                 "type": "boolean"
               },

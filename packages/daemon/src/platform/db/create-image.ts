@@ -1,5 +1,6 @@
 import type { ImageSource } from '@impz/api';
 import type { Selectable } from 'kysely';
+import { buildConflictError } from '../errors/build-not-found-error';
 import type { DB } from './db';
 import type { ImpDatabase, ImpQueries } from './open-database';
 
@@ -32,21 +33,39 @@ export async function createImage(
   image: NewImage,
   now: number = Date.now(),
 ): Promise<ImageRecord> {
-  const row = await db
-    .insertInto('images')
-    .values({
-      id: Bun.randomUUIDv7(),
-      name: image.name,
-      ref: image.ref,
-      digest: image.digest,
-      size_bytes: image.sizeBytes,
-      source: image.source ?? 'oci',
-      source_imp: image.sourceImp ?? null,
-      created_at: now,
-      last_used_at: now,
-    })
-    .returningAll()
-    .executeTakeFirstOrThrow();
+  // the alias check and the insert share a transaction, so an alias set during a long build
+  // makes the build's write answer a conflict
+  const row = await db.transaction().execute(async (trx) => {
+    const alias = await trx
+      .selectFrom('image_aliases')
+      .select('name')
+      .where('name', '=', image.name)
+      .executeTakeFirst();
+
+    if (alias !== undefined) {
+      throw buildConflictError(
+        'image',
+        image.name,
+        `image name ${image.name} is held by an alias; remove the alias first`,
+      );
+    }
+
+    return trx
+      .insertInto('images')
+      .values({
+        id: Bun.randomUUIDv7(),
+        name: image.name,
+        ref: image.ref,
+        digest: image.digest,
+        size_bytes: image.sizeBytes,
+        source: image.source ?? 'oci',
+        source_imp: image.sourceImp ?? null,
+        created_at: now,
+        last_used_at: now,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  });
 
   return toImageRecord(row);
 }
@@ -87,7 +106,7 @@ export async function listImages(db: ImpDatabase): Promise<ImageRecord[]> {
   return rows.map((row) => toImageRecord(row));
 }
 
-// throws on a foreign key while any imp still uses the image
+// throws on a foreign key while any imp or alias still uses the image
 export function removeImage(db: ImpDatabase, id: string): Promise<boolean> {
   return db.transaction().execute(async (trx) => {
     const row = await trx
@@ -106,7 +125,7 @@ export function removeImage(db: ImpDatabase, id: string): Promise<boolean> {
   });
 }
 
-function toImageRecord(row: Readonly<Selectable<DB['images']>>): ImageRecord {
+export function toImageRecord(row: Readonly<Selectable<DB['images']>>): ImageRecord {
   return {
     id: row.id,
     name: row.name,
@@ -222,6 +241,7 @@ export interface ImageUse {
   readonly lastUsedAt: number;
   readonly impCount: number;
   readonly isPinned: boolean;
+  readonly isAliased: boolean;
 }
 
 export async function listImageUses(db: ImpDatabase): Promise<ImageUse[]> {
@@ -237,6 +257,14 @@ export async function listImageUses(db: ImpDatabase): Promise<ImageUse[]> {
       'images.last_used_at',
       'images.pinned',
       eb.fn.count<number>('imps.id').as('imp_count'),
+      eb
+        .exists(
+          eb
+            .selectFrom('image_aliases')
+            .select('image_aliases.name')
+            .whereRef('image_aliases.image_id', '=', 'images.id'),
+        )
+        .as('is_aliased'),
     ])
     .groupBy('images.id')
     .orderBy('images.name')
@@ -251,6 +279,7 @@ export async function listImageUses(db: ImpDatabase): Promise<ImageUse[]> {
     lastUsedAt: row.last_used_at,
     impCount: row.imp_count,
     isPinned: row.pinned === 1,
+    isAliased: Boolean(row.is_aliased),
   }));
 }
 
@@ -269,6 +298,16 @@ export function removeUnusedImage(
         eb.not(
           eb.exists(
             eb.selectFrom('imps').select('imps.id').whereRef('imps.image_id', '=', 'images.id'),
+          ),
+        ),
+      )
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('image_aliases')
+              .select('image_aliases.name')
+              .whereRef('image_aliases.image_id', '=', 'images.id'),
           ),
         ),
       )

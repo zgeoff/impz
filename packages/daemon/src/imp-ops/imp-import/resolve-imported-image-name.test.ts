@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createImage } from '../../platform/db/create-image';
+import { updateImageAlias } from '../../platform/db/update-image-alias';
+import { buildMockNewImage } from '../../test-utils/imps/build-mock-new-image';
 import { createTestDatabase } from '../../test-utils/platform/create-test-database';
 import { resolveImportedImageName } from './resolve-imported-image-name';
 
@@ -79,6 +81,29 @@ test('it refuses an image whose name and tagged name are both taken', async () =
     resolveImportedImageName(ctx.db, 'web', `sha256:${'a1'.repeat(32)}`),
   ).rejects.toMatchObject({
     code: 'CONFLICT',
-    message: 'images web and web-a1a1a1a1 both exist; remove one to import this image',
+    message:
+      'images web and web-a1a1a1a1 both exist, or an alias holds one of them; remove one to import this image',
   });
+});
+
+test('#resolveImportedImageName import falls back to the digest-suffixed name when an alias holds the name', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'base-1' }));
+  await updateImageAlias(ctx.db, 'web', 'base-1', 100);
+
+  const name = await resolveImportedImageName(ctx.db, 'web', `sha256:${'a1'.repeat(32)}`);
+
+  expect(name).toBe('web-a1a1a1a1');
+});
+
+test('it refuses an import whose digest-suffixed name an alias holds', async () => {
+  const ctx = await setupTest();
+
+  await createImage(ctx.db, buildMockNewImage({ name: 'web' }));
+  await updateImageAlias(ctx.db, 'web-a1a1a1a1', 'web', 100);
+
+  expect(
+    resolveImportedImageName(ctx.db, 'web', `sha256:${'a1'.repeat(32)}`),
+  ).rejects.toMatchObject({ code: 'CONFLICT' });
 });

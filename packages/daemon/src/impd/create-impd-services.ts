@@ -29,6 +29,7 @@ export function createImpdServices(
     config,
     db,
     imps: parts.imps,
+    images: parts.storage.images,
     storage,
     diskBudget: parts.storage.diskBudget,
     ...freezer,
