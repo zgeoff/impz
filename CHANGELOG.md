@@ -2,10 +2,11 @@
 
 ## [7.8.1](https://github.com/zgeoff/impz/compare/v7.8.0...v7.8.1) (2026-11-28)
 
-
 ### Bug Fixes
 
-* **verify:** flag only the features a change can reach ([#1155](https://github.com/zgeoff/impz/issues/1155)) ([0f7a02f](https://github.com/zgeoff/impz/commit/0f7a02fdfc9a08985f1a528fc388ffd38938d9a4))
+- **verify:** flag only the features a change can reach
+  ([#1155](https://github.com/zgeoff/impz/issues/1155))
+  ([0f7a02f](https://github.com/zgeoff/impz/commit/0f7a02fdfc9a08985f1a528fc388ffd38938d9a4))
 
 ## [7.8.0](https://github.com/zgeoff/impz/compare/v7.7.0...v7.8.0) (2026-11-23)
 
