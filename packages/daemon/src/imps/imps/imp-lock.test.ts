@@ -31,6 +31,7 @@ async function setupTest() {
     readUnsharedRamMib: () => null,
     checkGuestMerge: () => Promise.resolve(null),
     probeUffdDevice: () => false,
+    probeTransparentHugePages: () => true,
     growFilesystem: () => Promise.resolve(false),
     sleep: () => Promise.resolve(),
     sleepTiming: { now: () => 0, sleep: () => Promise.resolve() },

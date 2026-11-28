@@ -92,6 +92,7 @@ export interface ImpServiceDeps {
   readonly readUnsharedRamMib: (pid: number, apiSocket: string) => number | null;
   readonly checkGuestMerge: (pid: number) => Promise<boolean | null>;
   readonly probeUffdDevice: () => boolean;
+  readonly probeTransparentHugePages: () => boolean;
 
   // An older tailnet node can hold the configured name, so the live name can
   // differ from it.
@@ -182,6 +183,7 @@ export interface ImpMemory {
   readonly readSleepRamMib: (pid: number, apiSocket: string) => number | null;
   readonly checkGuestMerge: (pid: number) => Promise<boolean | null>;
   readonly probeUffdDevice: () => boolean;
+  readonly probeTransparentHugePages: () => boolean;
   readonly mergeFlags: MergeFlags;
   readonly memoryLimit: MemoryLimit;
   readonly priorityNames: Map<string, string>;
@@ -281,6 +283,7 @@ export function createImpContext(deps: ImpServiceDeps): ImpContext {
     readSleepRamMib: deps.config.ksm === null ? deps.readRamMib : deps.readUnsharedRamMib,
     checkGuestMerge: deps.checkGuestMerge,
     probeUffdDevice: deps.probeUffdDevice,
+    probeTransparentHugePages: deps.probeTransparentHugePages,
     mergeFlags: createMergeFlags(),
     memoryLimit: deps.memoryLimit ?? NO_MEMORY_LIMIT,
     priorityNames,

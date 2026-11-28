@@ -48,15 +48,20 @@ impd picks THP at each cold boot, and the pick works with `IMP_HUGE_PAGES` on or
 | Imp                                                    | `IMP_HUGE_PAGES=2M` | `IMP_HUGE_PAGES=off` |
 | ------------------------------------------------------ | ------------------- | -------------------- |
 | fixed memory, a whole number of huge pages             | the pool            | ordinary pages       |
-| elastic, memory a whole number of huge pages           | THP                 | THP                  |
+| elastic, memory and max memory whole huge pages        | THP                 | THP                  |
 | any imp whose memory is no whole number of huge pages  | ordinary pages      | ordinary pages       |
 | elastic, with `IMP_ELASTIC_TRANSPARENT_HUGE_PAGES=off` | ordinary pages      | ordinary pages       |
+| elastic, on a host kernel with no THP, or THP `never`  | ordinary pages      | ordinary pages       |
 
 Firecracker refuses a huge-page guest whose memory is no whole number of huge pages, so such an imp
-boots on ordinary pages, and the client refuses to send a machine config that breaks the rule. The
-rest of an elastic guest's memory is aligned already: the hot-plug region is a whole number of
-slots, and virtio-mem plugs and unplugs blocks of one huge page, so each unplug drops a whole huge
-page.
+boots on ordinary pages, and the client refuses to send a machine config that breaks the rule. An
+elastic imp grows in whole blocks of one huge page, so impd refuses at create an elastic imp whose
+memory or max memory is not a whole number of them. The hot-plug region is a whole number of slots,
+and virtio-mem plugs and unplugs those blocks, so each unplug drops a whole huge page.
+
+A host kernel built without THP refuses Firecracker's `madvise` and fails the boot, so impd reads
+`/sys/kernel/mm/transparent_hugepage/enabled` at each cold boot. It asks for THP only when the file
+exists and the mode is not `never`.
 
 THP covers a cold boot only. Firecracker does not combine THP with UFFD, and a snapshot restore from
 a memory file drops the `madvise` hint, so an elastic imp that sleeps and wakes continues on

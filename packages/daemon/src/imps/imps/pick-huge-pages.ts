@@ -1,5 +1,5 @@
-import type { VmConfig } from '../../vm/vm-config';
 import type { HugePages } from '../../vm/vmm/firecracker-client';
+import type { ImpsConfig } from '../imps-config';
 
 interface PageShape {
   readonly memoryMib: number;
@@ -14,9 +14,9 @@ interface PageSettings {
   readonly isElasticTransparent: boolean;
 }
 
-// Firecracker refuses a huge-page guest whose memory is not a whole number of
-// huge pages. An elastic imp cannot take the pool, because its hot-plugged
-// memory has no pool pages, so it takes the host's transparent huge pages.
+// Firecracker refuses a huge-page guest whose memory is not a whole number of huge pages, and an
+// elastic imp grows in whole 2 MiB blocks. An elastic imp cannot take the pool, because its
+// hot-plugged memory has no pool pages, so it takes the host's transparent huge pages.
 export function pickHugePages(
   settings: Readonly<PageSettings>,
   imp: Readonly<PageShape>,
@@ -26,17 +26,23 @@ export function pickHugePages(
   }
 
   if (imp.maxMemoryMib > imp.memoryMib) {
-    return settings.isElasticTransparent ? 'Transparent' : 'None';
+    return settings.isElasticTransparent && imp.maxMemoryMib % 2 === 0 ? 'Transparent' : 'None';
   }
 
   return settings.isOn ? '2M' : 'None';
 }
 
-export function buildPageSettings(
-  config: Pick<VmConfig, 'hugePages' | 'isElasticTransparentHugePages'>,
+// A kernel without transparent huge pages refuses Firecracker's madvise, which fails the boot,
+// so the host's own kernel decides whether the setting takes effect.
+export function readPageSettings(
+  context: Readonly<{
+    config: Pick<ImpsConfig, 'hugePages' | 'isElasticTransparentHugePages'>;
+    probeTransparentHugePages: () => boolean;
+  }>,
 ): PageSettings {
   return {
-    isOn: config.hugePages !== null,
-    isElasticTransparent: config.isElasticTransparentHugePages,
+    isOn: context.config.hugePages !== null,
+    isElasticTransparent:
+      context.config.isElasticTransparentHugePages && context.probeTransparentHugePages(),
   };
 }

@@ -62,6 +62,12 @@ export function resolveMaxMemoryMib(memoryMib: number, requested: number | undef
     });
   }
 
+  if (requested > memoryMib && (memoryMib % BLOCK_MIB !== 0 || requested % BLOCK_MIB !== 0)) {
+    throw new ImpdError('BAD_REQUEST', {
+      message: `an imp that grows needs a memory (${String(memoryMib)} MiB) and a max memory (${String(requested)} MiB) of whole ${String(BLOCK_MIB)} MiB blocks`,
+    });
+  }
+
   return requested;
 }
 

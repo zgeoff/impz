@@ -93,6 +93,22 @@ test('#resolveMaxMemoryMib refuses a max past 4 times the memory as a bad reques
   });
 });
 
+test.each([
+  { memoryMib: 257, requested: 514 },
+  { memoryMib: 256, requested: 513 },
+])(
+  '#resolveMaxMemoryMib refuses a growing imp of $memoryMib MiB and a max of $requested MiB',
+  (row) => {
+    expect(() => resolveMaxMemoryMib(row.memoryMib, row.requested)).toThrow(
+      `an imp that grows needs a memory (${String(row.memoryMib)} MiB) and a max memory (${String(row.requested)} MiB) of whole 2 MiB blocks`,
+    );
+  },
+);
+
+test('#resolveMaxMemoryMib takes an odd memory for an imp that does not grow', () => {
+  expect(resolveMaxMemoryMib(257, 257)).toBe(257);
+});
+
 test('#resolveMaxMemoryMib says to raise the memory with a max past 4 times it', () => {
   expect(() => resolveMaxMemoryMib(512, 2050)).toThrow(
     'the max memory (2050 MiB) is more than 4 × the memory (2048 MiB)',

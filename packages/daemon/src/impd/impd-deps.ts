@@ -49,6 +49,7 @@ export type ImpBoundaries = Partial<
     | 'readUnsharedRamMib'
     | 'checkGuestMerge'
     | 'probeUffdDevice'
+    | 'probeTransparentHugePages'
     | 'growFilesystem'
     | 'hostCpus'
     | 'memoryLimit'

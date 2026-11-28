@@ -29,12 +29,20 @@ async function setupTest() {
   // the host's pool of 2 MiB pages, empty until a test sizes it
   const hugePool = { totalMib: 0, freeMib: 0 };
 
+  // whether the host kernel has transparent huge pages
+  const kernel = { hasTransparentHugePages: true };
+
   const harness = await startTestImpd(stack, {
     env: readImpEnv(),
-    boundaries: { imps: { readHugePagePool: () => ({ ...hugePool }) } },
+    boundaries: {
+      imps: {
+        readHugePagePool: () => ({ ...hugePool }),
+        probeTransparentHugePages: () => kernel.hasTransparentHugePages,
+      },
+    },
   });
 
-  return Object.assign(harness, { hugePool });
+  return Object.assign(harness, { hugePool, kernel });
 }
 
 test('it lets a restore waiting for admission past the governor sleeping its imp', async () => {
@@ -923,17 +931,11 @@ test('it boots an imp on host pages with huge pages off, and records none', asyn
   expect(identity).not.toContainKey('hugePages');
 });
 
-test('it boots an elastic imp on transparent huge pages, records them, and leaves the pool alone', async () => {
+test('it boots an elastic imp on transparent huge pages, records them, and asks the pool for none', async () => {
   updateEnv('IMP_HUGE_PAGES', '2M');
 
-  const stack = new AsyncDisposableStack();
-
-  onTestFinished(() => stack.disposeAsync());
-
-  const ctx = await startTestImpd(stack, {
-    env: readImpEnv(),
-    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 4096, freeMib: 4096 }) } },
-  });
+  // the pool is empty, so the boot passes admission only if it asks the pool for nothing
+  const ctx = await setupTest();
 
   await ctx.createTestImage('ubuntu');
 
@@ -941,6 +943,33 @@ test('it boots an elastic imp on transparent huge pages, records them, and leave
 
   expect(ctx.fake.bootPlans.map((plan) => plan.hugePages)).toStrictEqual(['Transparent']);
   expect(readVmIdentity(buildImpPaths(ctx.dataDir, created.id))?.hugePages).toBe('Transparent');
+});
+
+test('it leaves the whole pool to the next imp while an elastic imp runs on transparent huge pages', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const ctx = await setupTest();
+
+  ctx.hugePool.totalMib = 512;
+  ctx.hugePool.freeMib = 512;
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'elastic', memoryMib: 256, maxMemoryMib: 512 });
+  await ctx.client.imps.create({ name: 'fixed', memoryMib: 512 });
+
+  expect(ctx.fake.bootPlans.map((plan) => plan.hugePages)).toStrictEqual(['Transparent', '2M']);
+});
+
+test('it boots an elastic imp on host pages on a kernel without transparent huge pages', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  ctx.kernel.hasTransparentHugePages = false;
+
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 512 });
+
+  expect(ctx.fake.bootPlans.map((plan) => plan.hugePages)).toStrictEqual(['None']);
 });
 
 test('it boots an elastic imp on host pages when IMP_ELASTIC_TRANSPARENT_HUGE_PAGES is off', async () => {
@@ -960,14 +989,27 @@ test('it boots an elastic imp on host pages when IMP_ELASTIC_TRANSPARENT_HUGE_PA
   expect(identity).not.toContainKey('hugePages');
 });
 
-test('it boots an elastic imp of an odd MiB count on host pages', async () => {
-  const ctx = await setupTest();
+test.each([
+  { memoryMib: 257, maxMemoryMib: 514 },
+  { memoryMib: 256, maxMemoryMib: 513 },
+])(
+  'it refuses an elastic imp of $memoryMib MiB with a max of $maxMemoryMib MiB at create',
+  async (row) => {
+    const ctx = await setupTest();
 
-  await ctx.createTestImage('ubuntu');
-  await ctx.client.imps.create({ name: 'dev', memoryMib: 257, maxMemoryMib: 514 });
+    await ctx.createTestImage('ubuntu');
 
-  expect(ctx.fake.bootPlans.map((plan) => plan.hugePages)).toStrictEqual(['None']);
-});
+    const creating = ctx.client.imps.create({
+      name: 'dev',
+      memoryMib: row.memoryMib,
+      maxMemoryMib: row.maxMemoryMib,
+    });
+
+    expect(creating).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(creating).rejects.toThrow('of whole 2 MiB blocks');
+    expect(ctx.fake.bootPlans).toBeEmpty();
+  },
+);
 
 test('it wakes an elastic imp from a transparent boot on host pages, and records none', async () => {
   const ctx = await setupTest();

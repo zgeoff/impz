@@ -25,7 +25,7 @@ import { formatTimings } from './format-timings';
 import type { ImpContext } from './imp-context';
 import { toLockedImp } from './imp-lock';
 import type { LockedImp } from './imp-lock';
-import { buildPageSettings, pickHugePages } from './pick-huge-pages';
+import { pickHugePages } from './pick-huge-pages';
 import { pickWakeHugePages } from './pick-wake-huge-pages';
 import { startCounting } from './read-running-imp-usage';
 import { requireNoOopsHold } from './require-no-oops-hold';
@@ -206,7 +206,8 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
   };
 
   const canBootOnPool = (imp: LockedImp): boolean =>
-    pickHugePages(buildPageSettings(context.config), imp) === '2M';
+    pickHugePages({ isOn: context.config.hugePages !== null, isElasticTransparent: false }, imp) ===
+    '2M';
 
   // the guest left its 2 MiB pages behind, and holds no pool pages from here on
   const writeHostPagesIdentity = (imp: LockedImp, paths: ImpPaths): void => {
