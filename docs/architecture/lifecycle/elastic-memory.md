@@ -27,11 +27,13 @@ into.
 
 ## Page size
 
-An elastic guest's cold boot runs on the host's transparent huge pages (THP), so its memory faults
+An elastic guest never takes the pool. When the host kernel has transparent huge pages (THP) and
+`IMP_ELASTIC_TRANSPARENT_HUGE_PAGES` is on, the guest's cold boot runs on them, so its memory faults
 in a huge page at a time, and virtio-mem's blocks line up with them: an unplug drops whole huge
-pages. A wake restores from the memory file and keeps no THP, so the guest runs on ordinary pages
-until its next cold boot. The memory is ordinary memory throughout, never the pool
-([huge pages](./huge-pages.md#transparent-huge-pages-for-elastic-imps)).
+pages. Otherwise the cold boot runs on ordinary pages. A wake restores from the memory file and
+keeps no THP, so the guest runs on ordinary pages until its next cold boot. The memory counts as
+ordinary memory throughout ([huge pages](./huge-pages.md#transparent-huge-pages-for-elastic-imps)
+has the full table).
 
 ## The controller
 

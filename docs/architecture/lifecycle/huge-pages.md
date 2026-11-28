@@ -43,13 +43,14 @@ deferred pages that the kernel zeroes one by one, and a large first fill of memo
 page. On a host that measured it, a guest on THP booted and filled memory about as fast as one on
 the pool, and many times faster than one on ordinary pages.
 
-impd picks THP at each cold boot, and the pick works with `IMP_HUGE_PAGES` on or off:
+impd picks THP at each cold boot, and the pick works with `IMP_HUGE_PAGES` on or off. In the table,
+"ordinary pages" means the host's base pages with no huge-page hint:
 
 | Imp                                                    | `IMP_HUGE_PAGES=2M` | `IMP_HUGE_PAGES=off` |
 | ------------------------------------------------------ | ------------------- | -------------------- |
 | fixed memory, a whole number of huge pages             | the pool            | ordinary pages       |
 | elastic, memory and max memory whole huge pages        | THP                 | THP                  |
-| any imp whose memory is no whole number of huge pages  | ordinary pages      | ordinary pages       |
+| fixed memory, no whole number of huge pages            | ordinary pages      | ordinary pages       |
 | elastic, with `IMP_ELASTIC_TRANSPARENT_HUGE_PAGES=off` | ordinary pages      | ordinary pages       |
 | elastic, on a host kernel with no THP, or THP `never`  | ordinary pages      | ordinary pages       |
 
@@ -87,8 +88,9 @@ booted pid 4211 spawn=58ms ... ; host stall cpu=12ms io=0ms memory=0ms steal=0ms
 | `compact_stall=`      | the times a process stalled while the host compacted memory for a huge page      |
 
 The counts are host-wide, so a busy host shows other processes' faults too. A `thp_fault_fallback`
-that grows with the load means the host's free memory is too fragmented to back the guests with huge
-pages. A host without `/proc/vmstat` leaves the fields out, and the boot goes on.
+that grows with the load has one of two causes: the host's free memory is too fragmented to back the
+guests with huge pages, or a memory cgroup refused the charge for a huge page. A host without
+`/proc/vmstat` leaves the fields out, and the boot goes on.
 
 ## The page handler
 
@@ -204,7 +206,7 @@ stopped the memory file's warm after 12ms: the imp woke
 ## RAM
 
 An elastic imp on THP holds no pool pages, so the governor admits it, and counts what it holds, on
-the ordinary budget alone, as it does for an imp on ordinary pages.
+the ordinary budget alone, as it does for any imp that holds no pool pages.
 
 Pool pages are not anonymous memory and not file pages, so the governor reads each VM's hugetlb
 count beside its proportional set size and counts it as owned, resident and unshared
@@ -218,15 +220,15 @@ It refuses the request with `RAM_BUDGET_EXCEEDED` when the free pool cannot hold
 and the new guest's whole memory. It sleeps no imp to make pool room, because the imps it would
 sleep may hold no pool pages.
 
-The host reserves the pool out of the RAM the budget counts, and a guest on ordinary pages can never
-take a pool page. On a host with a pool, the governor therefore holds a second line: the ordinary
-budget, which is the budget less the whole pool. It counts every guest on ordinary pages, the locked
-pages and the KSM headroom against the ordinary budget, and for a guest on huge pages only what it
-holds beside its pool pages. A boot, wake or grow on ordinary pages must fit both budgets, and
-enforcement sleeps imps while either one is over. A refusal that the ordinary budget makes names
-that budget and its numbers. To make room under the ordinary budget, the governor counts what each
-imp holds outside the pool, so it never counts a guest's pool pages as room that its sleep frees
-there.
+The host reserves the pool out of the RAM the budget counts, and a guest on ordinary pages or THP
+can never take a pool page. On a host with a pool, the governor therefore holds a second line: the
+ordinary budget, which is the budget less the whole pool. It counts every guest that holds no pool
+pages, whether on ordinary pages or THP, the locked pages and the KSM headroom against the ordinary
+budget, and for a guest on huge pages only what it holds beside its pool pages. A boot, wake or grow
+of a guest outside the pool must fit both budgets, and enforcement sleeps imps while either one is
+over. When the ordinary budget refuses a request, the error names that budget and its numbers. To
+make room under the ordinary budget, the governor counts what each imp holds outside the pool, so it
+never counts a guest's pool pages as room that its sleep frees there.
 
 A sleeping imp of fixed memory whose snapshot is on ordinary pages, such as one that slept before
 the host turned huge pages on, wakes on ordinary pages. When the ordinary budget refuses that wake,
