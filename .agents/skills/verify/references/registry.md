@@ -1,11 +1,16 @@
 # The verify registry
 
-Edit the globs in [`feature-paths.ts`](../../../../scripts/verify/feature-paths.ts) and
-[`core-paths.ts`](../../../../scripts/verify/core-paths.ts). Write each glob relative to the repo
-root. Edit the rest of a feature, such as its name and summary, in
-[`create-verify-registry.ts`](../../../../scripts/verify/create-verify-registry.ts). The registry
-reads each feature's `paths` from `featurePaths`, passes `sharedPaths` to `.shared()`, and passes
-`ignoredPaths` to `.ignore()`. `sharedPaths` and `ignoredPaths` live in `feature-paths.ts`.
+The registry, [`create-verify-registry.ts`](../../../../scripts/verify/create-verify-registry.ts),
+takes its globs from two files, so edit the globs there:
+
+- [`feature-paths.ts`](../../../../scripts/verify/feature-paths.ts) holds `featurePaths`, each
+  feature's `paths`; `sharedPaths`, which the registry passes to `.shared()`; and `ignoredPaths`,
+  which it passes to `.ignore()`.
+- [`core-paths.ts`](../../../../scripts/verify/core-paths.ts) holds `corePaths`, which every feature
+  on `local` holds.
+
+Write each glob relative to the repo root. Edit the rest of a feature, such as its name and summary,
+in `create-verify-registry.ts`.
 
 ## Features on `local`
 
@@ -19,13 +24,13 @@ reads each feature's `paths` from `featurePaths`, passes `sharedPaths` to `.shar
   `packages/cli`, with the folder of each workspace package it depends on at run time.
   `feature-paths.ts` reads the dependencies from each `package.json` when it loads.
 - the feature's `paths`, the globs for the parts of a package that its journey runs, such as the
-  event routes in `packages/daemon`. `feature-paths.ts` adds the folders of that package's workspace
-  dependencies itself, so list only the globs.
+  event routes in `packages/daemon`. List only the globs: `feature-paths.ts` adds the folders of
+  that package's workspace dependencies itself, as for a package in `packages`.
 
-When `feature-paths.ts` adds dependency folders, it skips each package that `corePaths` splits into
-globs, such as `packages/daemon`. It also skips `packages/mcp`: the CLI and impd import it at start,
-but only an MCP journey calls it. Name `packages/mcp` in the `packages` of each feature whose
-journey calls an MCP tool.
+When `feature-paths.ts` adds dependency folders, it never adds a package that `corePaths` splits
+into globs, such as `packages/daemon`, as a whole folder. It also never adds `packages/mcp`: the CLI
+and impd import it at start, but only an MCP journey calls it. Name `packages/mcp` in the `packages`
+of each feature whose journey calls an MCP tool.
 
 A journey reaches a path when its actions, its reads or the CLI commands it runs run that path. impd
 loads every route and the MCP server at start, and `bun verify doctor` runs before every journey,
