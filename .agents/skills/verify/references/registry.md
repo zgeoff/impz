@@ -1,7 +1,8 @@
 # The verify registry
 
 The registry, [`create-verify-registry.ts`](../../../../scripts/verify/create-verify-registry.ts),
-takes its globs from two files, so edit the globs there:
+takes its globs from two files. When SKILL.md says to add a glob to a feature's `paths`, to
+`.shared()` or to `.ignore()`, add it to one of the lists in these files:
 
 - [`feature-paths.ts`](../../../../scripts/verify/feature-paths.ts) holds `featurePaths`, each
   feature's `paths`; `sharedPaths`, which the registry passes to `.shared()`; and `ignoredPaths`,
