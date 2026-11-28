@@ -5,7 +5,7 @@ go 1.26.0
 toolchain go1.27.4
 
 require (
-	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/mdlayher/vsock v1.4.0
 	github.com/moby/sys/user v0.5.0
 	github.com/pkg/sftp v1.13.12
