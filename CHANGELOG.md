@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.10.0](https://github.com/zgeoff/impz/compare/v7.9.0...v7.10.0) (2026-11-28)
+
+
+### Features
+
+* **daemon:** warm the blocks a wake served, not the whole memory file ([#1165](https://github.com/zgeoff/impz/issues/1165)) ([58b2d57](https://github.com/zgeoff/impz/commit/58b2d574d36580c8363e137f469d189b5f7ed2b4))
+
 ## [7.9.0](https://github.com/zgeoff/impz/compare/v7.8.1...v7.9.0) (2026-11-28)
 
 ### Features
