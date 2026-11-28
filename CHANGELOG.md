@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.9.0](https://github.com/zgeoff/impz/compare/v7.8.1...v7.9.0) (2026-11-28)
+
+
+### Features
+
+* **imps:** back elastic imps' cold boots with transparent huge pages ([#1164](https://github.com/zgeoff/impz/issues/1164)) ([92f7e31](https://github.com/zgeoff/impz/commit/92f7e31b4abe66dade95d7fbd8d2632cd0015f0f))
+
+
+### Performance Improvements
+
+* **vm:** quiet the guest kernel's serial console at boot ([#1163](https://github.com/zgeoff/impz/issues/1163)) ([1164f95](https://github.com/zgeoff/impz/commit/1164f957cae76ff131ccbb472ffe1baece121685))
+
 ## [7.8.1](https://github.com/zgeoff/impz/compare/v7.8.0...v7.8.1) (2026-11-28)
 
 ### Bug Fixes
