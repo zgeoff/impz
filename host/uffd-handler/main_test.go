@@ -60,6 +60,7 @@ type uffdioRegisterArg struct {
 func TestMain(m *testing.M) {
 	if os.Getenv(handlerModeEnv) != "" {
 		main()
+		os.Exit(0)
 	}
 	if socket := os.Getenv(peerSocketEnv); socket != "" {
 		if err := runPeer(socket); err != nil {
@@ -281,6 +282,35 @@ func TestRunMarksTheBlocksItServesInTheTouchedFile(t *testing.T) {
 	p.stdin.Close()
 	assert.NilError(t, p.cmd.Wait())
 	assert.NilError(t, <-done)
+
+	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
+
+	assert.NilError(t, err)
+	assert.DeepEqual(t, raw, []byte{1})
+}
+
+func TestTheHandlerMarksTheBlocksItServesInTheFileImpdPassesAsDescriptor5(t *testing.T) {
+	// a socket path has a 108-byte limit, which a TMPDIR can pass
+	dir := t.TempDir()
+	t.Chdir(dir)
+	self, err := os.Executable()
+	assert.NilError(t, err)
+	touched, err := os.OpenFile(filepath.Join(dir, "uffd.touched"), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
+	assert.NilError(t, err)
+	cmd := exec.Command(self, "--socket", "uffd.sock")
+	cmd.Env = append(os.Environ(), handlerModeEnv+"=1")
+	cmd.Stderr = os.Stderr
+	// impd's descriptors 3, 4 and 5, in the order it passes them
+	cmd.ExtraFiles = []*os.File{writeMemFile(t, dir), writeStatsFile(t, dir), touched}
+	assert.NilError(t, cmd.Start())
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+	p := startPeer(t, "uffd.sock", testPages, "0,2")
+	readPeerBytes(t, p, 2)
+	p.stdin.Close()
+	assert.NilError(t, cmd.Wait())
 
 	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
 

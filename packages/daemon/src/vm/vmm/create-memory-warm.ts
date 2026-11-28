@@ -102,26 +102,55 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
     return WarmReportSchema.parse(JSON.parse(stdout)).blocks;
   };
 
+  // a record that the handler refuses, such as one that a newer handler wrote
+  // and an older binary cannot read, counts the same as no record
+  const countBlocks = async (
+    target: Readonly<WarmTarget>,
+    signal: AbortSignal,
+  ): Promise<{ scope: WarmScope; blocks: number }> => {
+    if (existsSync(target.blockList)) {
+      try {
+        return {
+          scope: 'recorded',
+          blocks: await readBlocks(RECORDED_MODES.count, target, signal),
+        };
+      } catch (error) {
+        signal.throwIfAborted();
+
+        getImpdLogger('imps')
+          .with({ imp: target.name })
+          .warning(
+            'the recorded blocks of the memory file cannot be counted, so the whole file is: {error}',
+            {
+              error: getErrorMessage(error),
+            },
+          );
+      }
+    }
+
+    return { scope: 'whole', blocks: await readBlocks(WHOLE_MODES.count, target, signal) };
+  };
+
   const runWarm = async (
     target: Readonly<WarmTarget>,
     signal: AbortSignal,
   ): Promise<WarmOutcome> => {
     const startedMs = performance.now();
-    const scope: WarmScope = existsSync(target.blockList) ? 'recorded' : 'whole';
-    const modes = scope === 'recorded' ? RECORDED_MODES : WHOLE_MODES;
 
     try {
-      const blocks = await readBlocks(modes.count, target, signal);
+      const counted = await countBlocks(target, signal);
 
-      if (blocks * BLOCK_MIB > deps.capMib) {
-        return { kind: 'overCap', scope, blocks };
+      if (counted.blocks * BLOCK_MIB > deps.capMib) {
+        return { kind: 'overCap', scope: counted.scope, blocks: counted.blocks };
       }
+
+      const modes = counted.scope === 'recorded' ? RECORDED_MODES : WHOLE_MODES;
 
       const read = await readBlocks(modes.warm, target, signal);
 
       return {
         kind: 'warmed',
-        scope,
+        scope: counted.scope,
         blocks: read,
         warmMs: Math.round(performance.now() - startedMs),
       };

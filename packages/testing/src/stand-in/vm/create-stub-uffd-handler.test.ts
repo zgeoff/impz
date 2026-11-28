@@ -187,3 +187,46 @@ test('it runs a warm until it is killed when a test sets it to hang', async () =
 
   expect(child.exited).resolves.toBe(143);
 });
+
+test('it answers a count of recorded blocks with the blocks its list marks', async () => {
+  const ctx = setupTest();
+  const handler = createStubUffdHandler(ctx.directoryPath);
+  const blockList = join(ctx.directoryPath, 'mem.touched');
+
+  writeFileSync(blockList, Buffer.from([1, 0, 1, 1]));
+
+  handler.answerWarm({ blocks: 40 });
+
+  const child = Bun.spawn(
+    [handler.path, '--count-blocks', blockList, join(ctx.directoryPath, 'mem')],
+    { stdio: ['ignore', 'pipe', 'inherit'] },
+  );
+
+  const exitCode = await child.exited;
+
+  const stdout = await new Response(child.stdout).text();
+
+  expect({ exitCode, stdout }).toStrictEqual({ exitCode: 0, stdout: '{"blocks":3}\n' });
+});
+
+test('it exits with its usage error on a block list mode when a test sets it to refuse them', async () => {
+  const ctx = setupTest();
+  const handler = createStubUffdHandler(ctx.directoryPath);
+  const blockList = join(ctx.directoryPath, 'mem.touched');
+
+  handler.answerWarm({ refusesBlockLists: true });
+
+  const child = Bun.spawn(
+    [handler.path, '--count-blocks', blockList, join(ctx.directoryPath, 'mem')],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+
+  const exitCode = await child.exited;
+
+  const stderr = await new Response(child.stderr).text();
+
+  expect({ exitCode, stderr }).toStrictEqual({
+    exitCode: 2,
+    stderr: 'flag provided but not defined\n',
+  });
+});

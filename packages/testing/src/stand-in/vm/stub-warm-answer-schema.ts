@@ -1,11 +1,14 @@
 import * as z from 'zod';
 
-// what the stub page handler answers impd's --count-data, --warm, --count-blocks
-// and --warm-blocks with: the data blocks it counts or reads, and whether the warm runs until it is killed.
+// what the stub page handler answers impd's warm modes with: the data blocks of a whole-file mode
+// (a blocks mode counts the blocks its list marks), and whether the warm runs until it is killed.
 // A serving stub marks the blocks `touches` lists in its descriptor 5.
 export const StubWarmAnswerSchema = z.object({
   blocks: z.int().nonnegative().default(1),
   hangs: z.boolean().default(false),
+
+  // refuses the block list modes, as a handler built before them does
+  refusesBlockLists: z.boolean().default(false),
   touches: z.array(z.int().nonnegative()).default([]),
 });
 

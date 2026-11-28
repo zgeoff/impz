@@ -77,6 +77,11 @@ if (memFile === undefined) {
   const warmMode = pickWarmMode(blockList !== undefined, isWarm);
   const answer = readAnswer();
 
+  if (blockList !== undefined && answer.refusesBlockLists) {
+    process.stderr.write('flag provided but not defined\n');
+    process.exit(2);
+  }
+
   appendFileSync(
     `${record}.warms`,
     `${JSON.stringify({ mode: warmMode, memFile, blockList, pid: process.pid })}\n`,
@@ -86,8 +91,18 @@ if (memFile === undefined) {
     // keeps the process alive, as a warm of a large file is, until impd kills it
     setInterval(() => {}, 60_000);
   } else {
-    process.stdout.write(`${JSON.stringify({ blocks: answer.blocks })}\n`);
+    process.stdout.write(`${JSON.stringify({ blocks: countAnswer(answer.blocks) })}\n`);
   }
+}
+
+// the blocks modes count the blocks the list marks, as the real handler counts
+// those that also hold data, so the answer's count serves only the whole file
+function countAnswer(wholeBlocks: number): number {
+  if (blockList === undefined) {
+    return wholeBlocks;
+  }
+
+  return [...readFileSync(blockList)].filter((mark) => mark !== 0).length;
 }
 
 function pickWarmMode(
