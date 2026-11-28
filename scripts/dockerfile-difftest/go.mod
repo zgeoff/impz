@@ -2,7 +2,7 @@ module github.com/zgeoff/impz/scripts/dockerfile-difftest
 
 go 1.26.8
 
-require github.com/moby/buildkit v0.35.0
+require github.com/moby/buildkit v0.35.1
 
 require (
 	github.com/containerd/typeurl/v2 v2.3.0 // indirect
