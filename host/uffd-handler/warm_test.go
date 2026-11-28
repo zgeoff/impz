@@ -251,6 +251,21 @@ func TestRunWarmOfBlocksReadsThePrefixThatTheLimitLeaves(t *testing.T) {
 	assert.DeepEqual(t, countCachedPages(t, path), []int{0, perBlock, 0, perBlock, perBlock})
 }
 
+func TestRunWarmOfBlocksReadsTheBlocksInTheOrderOfTheirFirstFault(t *testing.T) {
+	path := writeContiguousMemFile(t)
+	// faulted in the order 4, 1, 3, 0, 2
+	list := writeBlockList(t, 4, 2, 5, 3, 1)
+	var out bytes.Buffer
+	var read []int64
+
+	err := runWarmReporting(warmRequest{mode: warmBlocks, blockList: list, limit: 3, memFile: path}, &out, func(offset int64) {
+		read = append(read, offset)
+	})
+
+	assert.NilError(t, err)
+	assert.DeepEqual(t, read, []int64{4 * warmBlock, warmBlock, 3 * warmBlock})
+}
+
 func TestTheBlocksToWarmAreTheFirstDataBlocksOfTheListInItsOrder(t *testing.T) {
 	data := map[int64]bool{0: true, warmBlock: true, 3 * warmBlock: true, 4 * warmBlock: true}
 	// faulted in the order 4, 2 (a hole), 1, 3, 0

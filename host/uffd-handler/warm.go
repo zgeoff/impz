@@ -65,6 +65,12 @@ func parseWarmMode(args []string) (warmRequest, bool) {
 
 // runWarm writes one JSON line with the blocks it counted or read to out.
 func runWarm(req warmRequest, out io.Writer) error {
+	return runWarmReporting(req, out, nil)
+}
+
+// runWarmReporting is runWarm that also calls onRead, when it is not nil, with
+// the offset of each block just before the block is read.
+func runWarmReporting(req warmRequest, out io.Writer, onRead func(offset int64)) error {
 	file, err := os.Open(req.memFile)
 	if err != nil {
 		return fmt.Errorf("memory file: %w", err)
@@ -96,7 +102,7 @@ func runWarm(req warmRequest, out io.Writer) error {
 		}
 	}
 	if req.mode == warm || req.mode == warmBlocks {
-		source.readThroughMap(blocks, os.Getpagesize())
+		source.readThroughMap(blocks, os.Getpagesize(), onRead)
 	}
 	return json.NewEncoder(out).Encode(warmReport{Blocks: len(blocks)})
 }
@@ -120,10 +126,13 @@ func firstBlocks(blocks []int64, limit int) []int64 {
 
 // readThroughMap faults in each page of the blocks through the map, as the
 // handler's copy at a wake does, so the same pages land in the page cache.
-func (s *memSource) readThroughMap(blocks []int64, pageSize int) {
+func (s *memSource) readThroughMap(blocks []int64, pageSize int, onRead func(offset int64)) {
 	size := int64(len(s.mapped))
 	var sum byte
 	for _, offset := range blocks {
+		if onRead != nil {
+			onRead(offset)
+		}
 		end := min(offset+warmBlock, size)
 		for page := offset; page < end; page += int64(pageSize) {
 			sum += s.mapped[page]
