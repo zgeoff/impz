@@ -1,19 +1,30 @@
 package main
 
 import (
+	"cmp"
+	"encoding/binary"
 	"fmt"
 	"os"
+	"slices"
 
 	"golang.org/x/sys/unix"
 )
 
-// touchedBlocks marks, in a file of one byte per 2 MiB block of the memory
-// file, each block that a fault of this handler's run was served from. impd
-// keeps the file past the run, so the next sleep's warm reads only those
-// blocks. The file is a shared mapping, so a mark survives the handler's
-// death and costs the fault path no system call.
+// touchedEntry is the bytes that the touched file holds per 2 MiB block of the
+// memory file: a little-endian uint32, 0 for a block that no fault was served
+// from, and otherwise the 1-based order in which this handler's run first
+// served a fault from the block.
+const touchedEntry = 4
+
+// touchedBlocks records, in that file, each block that a fault of this
+// handler's run was served from and in what order. impd keeps the file past
+// the run, so the next sleep's warm reads those blocks first-fault first. The
+// file is a shared mapping, so a mark survives the handler's death and costs
+// the fault path no system call.
 type touchedBlocks struct {
 	mapped []byte
+	// the ordinal that the next first fault takes
+	next uint32
 }
 
 // blockCount is how many warmBlock blocks a memory file of size bytes spans.
@@ -25,7 +36,7 @@ func blockCount(size int64) int64 {
 // maps it.
 func openTouchedBlocks(file *os.File, memSize int64) (*touchedBlocks, error) {
 	defer file.Close()
-	size := blockCount(memSize)
+	size := blockCount(memSize) * touchedEntry
 	info, err := file.Stat()
 	if err != nil {
 		return nil, fmt.Errorf("touched file: %w", err)
@@ -43,7 +54,7 @@ func openTouchedBlocks(file *os.File, memSize int64) (*touchedBlocks, error) {
 	if err != nil {
 		return nil, fmt.Errorf("touched file: mmap: %w", err)
 	}
-	return &touchedBlocks{mapped: mapped}, nil
+	return &touchedBlocks{mapped: mapped, next: 1}, nil
 }
 
 func (t *touchedBlocks) close() {
@@ -52,32 +63,55 @@ func (t *touchedBlocks) close() {
 	}
 }
 
-// mark records that the memory file's block holding offset was served.
+// mark records that the memory file's block holding offset was served, in the
+// next ordinal when it is the block's first fault. A later fault keeps the
+// block's ordinal.
 func (t *touchedBlocks) mark(offset int64) {
 	if t == nil {
 		return
 	}
-	if block := offset / warmBlock; block < int64(len(t.mapped)) {
-		t.mapped[block] = 1
+	block := offset / warmBlock
+	if block >= int64(len(t.mapped))/touchedEntry {
+		return
 	}
+	entry := t.mapped[block*touchedEntry : (block+1)*touchedEntry]
+	if binary.LittleEndian.Uint32(entry) != 0 {
+		return
+	}
+	binary.LittleEndian.PutUint32(entry, t.next)
+	t.next++
 }
 
 // readTouchedBlocks lists the offsets of the blocks that the file at path
-// marks. A file shorter or longer than the memory file's blocks is not that
-// file's set, so it is refused.
-func readTouchedBlocks(path string, memSize int64) (map[int64]bool, error) {
+// marks, in the order of their first fault. A file whose size is not
+// touchedEntry bytes per block of the memory file is not that file's record,
+// so it is refused: so is the one-byte-per-block file that an earlier version
+// wrote.
+func readTouchedBlocks(path string, memSize int64) ([]int64, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("block list: %w", err)
 	}
-	if int64(len(raw)) != blockCount(memSize) {
-		return nil, fmt.Errorf("block list: %d blocks, but the memory file has %d", len(raw), blockCount(memSize))
+	blocks := blockCount(memSize)
+	if int64(len(raw)) != blocks*touchedEntry {
+		return nil, fmt.Errorf("block list: %d bytes, but the memory file's %d blocks need %d", len(raw), blocks, blocks*touchedEntry)
 	}
-	blocks := map[int64]bool{}
-	for block, mark := range raw {
-		if mark != 0 {
-			blocks[int64(block)*warmBlock] = true
+	type served struct {
+		ordinal uint32
+		offset  int64
+	}
+	var marked []served
+	for block := range blocks {
+		if ordinal := binary.LittleEndian.Uint32(raw[block*touchedEntry:]); ordinal != 0 {
+			marked = append(marked, served{ordinal: ordinal, offset: block * warmBlock})
 		}
 	}
-	return blocks, nil
+	slices.SortFunc(marked, func(a, b served) int {
+		return cmp.Or(cmp.Compare(a.ordinal, b.ordinal), cmp.Compare(a.offset, b.offset))
+	})
+	offsets := make([]int64, len(marked))
+	for i, entry := range marked {
+		offsets[i] = entry.offset
+	}
+	return offsets, nil
 }

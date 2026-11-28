@@ -4,7 +4,8 @@
 // on 2 MiB pages, impd also runs it with --count-data and --warm, which read
 // the new memory file's data blocks into the page cache for the next wake, or
 // with --count-blocks and --warm-blocks, which do so for the blocks that the
-// last run served.
+// last run served, --warm-blocks in the order of their first fault and up to a
+// limit.
 package main
 
 import (
@@ -55,7 +56,7 @@ func main() {
 
 	opts, err := parseOptions(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE 4<>STATS_FILE 5<>TOUCHED_FILE\n       uffd-handler --count-data|--warm MEMORY_FILE\n       uffd-handler --count-blocks|--warm-blocks BLOCK_LIST MEMORY_FILE\n", err)
+		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE 4<>STATS_FILE 5<>TOUCHED_FILE\n       uffd-handler --count-data|--warm MEMORY_FILE\n       uffd-handler --count-blocks BLOCK_LIST MEMORY_FILE\n       uffd-handler --warm-blocks BLOCK_LIST MEMORY_FILE LIMIT\n", err)
 		os.Exit(2)
 	}
 
