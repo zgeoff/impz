@@ -41,6 +41,9 @@ export interface VmConfig extends HostNetConfig {
   readonly jailDir: string;
   readonly ksm: KsmConfig | null;
   readonly hugePages: HugePagesConfig | null;
+
+  // an elastic imp's cold boot asks the host for transparent huge pages
+  readonly isElasticTransparentHugePages: boolean;
   readonly kernelPath: string;
 
   // impd copies the kernel and system drive in on start, so a rebuild never changes a

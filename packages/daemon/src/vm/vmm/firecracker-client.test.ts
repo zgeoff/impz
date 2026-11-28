@@ -127,6 +127,45 @@ test('it asks for 2 MiB pages in the machine config of a guest on huge pages', a
   ]);
 });
 
+test('it asks for transparent huge pages in the machine config of an elastic guest', async () => {
+  const ctx = setupTest();
+  const api = startStubFirecrackerApi(ctx.socket);
+
+  await createFirecrackerClient(ctx.socket).putMachineConfig({
+    vcpuCount: 2,
+    memSizeMib: 1024,
+    hugePages: 'Transparent',
+  });
+
+  expect(api.calls).toStrictEqual([
+    {
+      method: 'PUT',
+      path: '/machine-config',
+      body: { vcpu_count: 2, mem_size_mib: 1024, huge_pages: 'Transparent' },
+    },
+  ]);
+});
+
+test.each(['Transparent', '2M'] as const)(
+  'it refuses %s huge pages for a guest whose memory is not whole 2 MiB pages',
+  async (hugePages) => {
+    const ctx = setupTest();
+    const api = startStubFirecrackerApi(ctx.socket);
+
+    const putting = createFirecrackerClient(ctx.socket).putMachineConfig({
+      vcpuCount: 2,
+      memSizeMib: 513,
+      hugePages,
+    });
+
+    expect(putting).rejects.toThrow('need a whole number of 2 MiB pages, and 513 MiB is not');
+
+    await putting.catch(() => null);
+
+    expect(api.calls).toBeEmpty();
+  },
+);
+
 test('it sends a drive under its id', async () => {
   const ctx = setupTest();
   const api = startStubFirecrackerApi(ctx.socket);
@@ -358,6 +397,23 @@ test('it reads that a VM runs on 2 MiB pages', async () => {
   const config = await createFirecrackerClient(ctx.socket).loadMachineConfig();
 
   expect(config).toStrictEqual({ isTrackingDirtyPages: false, hugePages: '2M' });
+});
+
+test('it reads that a VM runs on transparent huge pages', async () => {
+  const ctx = setupTest();
+
+  startStubFirecrackerApi(ctx.socket, {
+    answers: {
+      'GET /machine-config': {
+        status: 200,
+        body: { vcpu_count: 2, mem_size_mib: 1024, smt: false, huge_pages: 'Transparent' },
+      },
+    },
+  });
+
+  const config = await createFirecrackerClient(ctx.socket).loadMachineConfig();
+
+  expect(config).toStrictEqual({ isTrackingDirtyPages: false, hugePages: 'Transparent' });
 });
 
 test('it reads no dirty page tracking from a machine config without the field', async () => {

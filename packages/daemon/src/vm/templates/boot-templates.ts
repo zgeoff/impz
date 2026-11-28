@@ -61,7 +61,7 @@ const TemplateMetaSchema = z.object({
   buildId: z.string(),
   vcpus: z.int().positive(),
   memoryMib: z.int().positive(),
-  hugePages: z.enum(['None', '2M']).default('None'),
+  hugePages: z.enum(['None', '2M', 'Transparent']).default('None'),
   systemDrivePath: z.string(),
 });
 

@@ -59,6 +59,7 @@ test('it fills every setting from its default when the env is empty', () => {
     jailDir: '/var/lib/imp/jail',
     ksm: null,
     hugePages: null,
+    isElasticTransparentHugePages: true,
     kernelPath: '/var/lib/imp/system/vmlinux',
     kernelSource: null,
     systemDriveSource: '/var/lib/imp/system/imp-system.squashfs',
@@ -883,6 +884,22 @@ test('it leaves huge pages off when IMP_HUGE_PAGES is off', () => {
   const config = loadConfig({ IMP_HUGE_PAGES: 'off', IMP_UFFD_HANDLER: '/opt/handler' });
 
   expect(config.hugePages).toBeNull();
+});
+
+test('it asks for transparent huge pages for elastic imps unless IMP_ELASTIC_TRANSPARENT_HUGE_PAGES is off', () => {
+  expect(loadConfig({}).isElasticTransparentHugePages).toBeTrue();
+
+  expect(
+    loadConfig({ IMP_ELASTIC_TRANSPARENT_HUGE_PAGES: 'on' }).isElasticTransparentHugePages,
+  ).toBeTrue();
+
+  expect(
+    loadConfig({ IMP_ELASTIC_TRANSPARENT_HUGE_PAGES: 'off' }).isElasticTransparentHugePages,
+  ).toBeFalse();
+});
+
+test('it refuses an IMP_ELASTIC_TRANSPARENT_HUGE_PAGES that is neither on nor off', () => {
+  expect(() => loadConfig({ IMP_ELASTIC_TRANSPARENT_HUGE_PAGES: 'maybe' })).toThrow();
 });
 
 test('it leaves KSM off and reads no headroom when IMP_KSM is 0', () => {

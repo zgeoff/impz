@@ -93,6 +93,7 @@ const EnvSchema = z.object({
   IMP_KSM_EXEC: z.string().default('ksm-exec'),
   IMP_KSM_HEADROOM_PERCENT: z.string().default('100'),
   IMP_HUGE_PAGES: z.enum(['off', '2M']).default('off'),
+  IMP_ELASTIC_TRANSPARENT_HUGE_PAGES: z.enum(['on', 'off']).default('on'),
   IMP_UFFD_HANDLER: z.string().default('uffd-handler'),
   IMP_WARM_CAP_MIB: CountSchema.default(2048),
   IMP_DNS: z.string().default('1.1.1.1,8.8.8.8').transform(splitList).pipe(DnsServersSchema),
@@ -337,6 +338,7 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): C
       parsed.IMP_HUGE_PAGES === '2M'
         ? { handlerBin: parsed.IMP_UFFD_HANDLER, warmCapMib: parsed.IMP_WARM_CAP_MIB }
         : null,
+    isElasticTransparentHugePages: parsed.IMP_ELASTIC_TRANSPARENT_HUGE_PAGES === 'on',
     kernelPath: join(parsed.IMP_DATA_DIR, 'system', 'vmlinux'),
     kernelSource: parsed.IMP_KERNEL ?? null,
     systemDriveSource:

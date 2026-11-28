@@ -720,7 +720,7 @@ test('it fails the add of a builder the governor refuses, with no host engine ca
   expect(ctx.docker.readCalls()).toStrictEqual([]);
 });
 
-test('it boots an elastic builder on ordinary pages when the free huge page pool is smaller than the build', async () => {
+test('it boots an elastic builder on transparent huge pages, not the pool, when the free huge page pool is smaller than the build', async () => {
   updateEnv('IMP_HUGE_PAGES', '2M');
 
   const ctx = await setupTest();
@@ -773,7 +773,7 @@ test('it boots an elastic builder on ordinary pages when the free huge page pool
       maxMemoryMib: plan.maxMemoryMib,
       hugePages: plan.hugePages,
     })),
-  ).toStrictEqual([{ memoryMib: 512, maxMemoryMib: 1024, hugePages: 'None' }]);
+  ).toStrictEqual([{ memoryMib: 512, maxMemoryMib: 1024, hugePages: 'Transparent' }]);
 });
 
 test('it boots a fixed builder on the huge page pool with no IMP_BUILD_MAX_MEMORY_MIB, and fails the add the free pool cannot hold', async () => {

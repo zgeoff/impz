@@ -923,6 +923,75 @@ test('it boots an imp on host pages with huge pages off, and records none', asyn
   expect(identity).not.toContainKey('hugePages');
 });
 
+test('it boots an elastic imp on transparent huge pages, records them, and leaves the pool alone', async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
+  const ctx = await startTestImpd(stack, {
+    env: readImpEnv(),
+    boundaries: { imps: { readHugePagePool: () => ({ totalMib: 4096, freeMib: 4096 }) } },
+  });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 512 });
+
+  expect(ctx.fake.bootPlans.map((plan) => plan.hugePages)).toStrictEqual(['Transparent']);
+  expect(readVmIdentity(buildImpPaths(ctx.dataDir, created.id))?.hugePages).toBe('Transparent');
+});
+
+test('it boots an elastic imp on host pages when IMP_ELASTIC_TRANSPARENT_HUGE_PAGES is off', async () => {
+  updateEnv('IMP_ELASTIC_TRANSPARENT_HUGE_PAGES', 'off');
+
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 512 });
+
+  const identity = readVmIdentity(buildImpPaths(ctx.dataDir, created.id));
+
+  invariant(identity);
+
+  expect(ctx.fake.bootPlans.map((plan) => plan.hugePages)).toStrictEqual(['None']);
+  expect(identity).not.toContainKey('hugePages');
+});
+
+test('it boots an elastic imp of an odd MiB count on host pages', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+  await ctx.client.imps.create({ name: 'dev', memoryMib: 257, maxMemoryMib: 514 });
+
+  expect(ctx.fake.bootPlans.map((plan) => plan.hugePages)).toStrictEqual(['None']);
+});
+
+test('it wakes an elastic imp from a transparent boot on host pages, and records none', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256, maxMemoryMib: 512 });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  expect(readSnapshotMeta(paths)?.hugePages).toBe('Transparent');
+
+  await ctx.client.imps.wake({ name: 'dev' });
+
+  const identity = readVmIdentity(paths);
+
+  invariant(identity);
+
+  expect(ctx.fake.wakePlans.map((plan) => plan.hugePages)).toStrictEqual(['None']);
+  expect(identity).not.toContainKey('hugePages');
+});
+
 test('it refuses a 2M imp the huge page pool cannot hold before any VM starts', async () => {
   updateEnv('IMP_HUGE_PAGES', '2M');
 
