@@ -27,8 +27,32 @@ test('#buildBootArgs builds the kernel cmdline with the slot addressing', () => 
       jail: null,
     }),
   ).toBe(
-    'console=ttyS0 reboot=k panic=1 pci=off i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd root=/dev/vdb rootfstype=squashfs ro init=/imp-agent imp.id=id imp.hostname=dev imp.ip=10.66.0.14/30 imp.gw=10.66.0.13 imp.dns=1.1.1.1,8.8.8.8',
+    'console=ttyS0 quiet reboot=k panic=1 pci=off i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd root=/dev/vdb rootfstype=squashfs ro init=/imp-agent imp.id=id imp.hostname=dev imp.ip=10.66.0.14/30 imp.gw=10.66.0.13 imp.dns=1.1.1.1,8.8.8.8',
   );
+});
+
+test('#buildBootArgs quiets the kernel console but keeps ttyS0 for panics and warnings', () => {
+  const address = deriveSlotAddress(3, { subnet: parseSubnet('10.66.0.0/16'), portBase: 20_000 });
+
+  const tokens = buildBootArgs({
+    firecrackerBin: 'firecracker',
+    kernelPath: '/k',
+    systemDrivePath: '/s',
+    paths: buildImpPaths('/var/lib/imp', 'id'),
+    address,
+    impId: 'id',
+    hostname: 'dev',
+    vcpus: 2,
+    memoryMib: 1024,
+    maxMemoryMib: 1024,
+    dns: ['1.1.1.1'],
+    cgroup: null,
+    isIdentityReset: false,
+    jail: null,
+  }).split(' ');
+
+  expect(tokens).toContain('quiet');
+  expect(tokens).toContain('console=ttyS0');
 });
 
 test('#buildBootArgs asks for no identity reset on a later boot', () => {

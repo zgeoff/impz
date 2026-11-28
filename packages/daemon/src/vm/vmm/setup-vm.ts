@@ -28,7 +28,7 @@ interface VmConfig {
 }
 
 export const BASE_BOOT_ARGS = [
-  'console=ttyS0 reboot=k panic=1 pci=off',
+  'console=ttyS0 quiet reboot=k panic=1 pci=off',
   'i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd',
   'root=/dev/vdb rootfstype=squashfs ro init=/imp-agent',
 ] as const;
