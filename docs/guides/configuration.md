@@ -1,8 +1,9 @@
 # Configuration
 
 impz reads environment variables in three places: impd, the host container scripts, and the CLI. The
-deploy files and the dev instance script read a few more, listed in their own sections. There is no
-config file. A server keeps the variables in an env file, `/etc/imp/imp-host.env`
+deploy files and the dev instance script read a few more, listed in their own sections. Only the CLI
+keeps a file of its own, the [named hosts](#cli) it saves. A server keeps the variables in an env
+file, `/etc/imp/imp-host.env`
 ([`deploy/imp-host.env.example`](../../deploy/imp-host.env.example)), which the systemd unit passes
 to the container. The [NixOS module](./nixos.md#the-env-file) writes its env file to tmpfs and
 mounts it into the container instead. An empty variable counts as unset. To change an impd variable,

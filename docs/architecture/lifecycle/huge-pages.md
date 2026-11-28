@@ -98,8 +98,10 @@ Firecracker restores a guest on huge pages only through userfaultfd (UFFD): it m
 memory empty and hands a page handler the file descriptor on which the kernel reports each fault.
 impd starts one handler per restore or wake, before Firecracker loads the snapshot.
 
-1. impd opens the snapshot's memory file, makes a zeroed stats file in the imp's run directory, and
-   starts the handler with both files as inherited descriptors, inside the imp's cgroup.
+1. impd opens the snapshot's memory file, makes a zeroed stats file and a zeroed file for the
+   [record of the blocks a wake served](#the-record-of-the-blocks-a-wake-served) in the imp's run
+   directory, and starts the handler with the three files as inherited descriptors, inside the imp's
+   cgroup.
 2. The handler binds its socket in the imp's run directory, which the jail binds in, owned by the
    jail's user, and drops its own privileges to that user.
 3. Firecracker connects at the load, sends the guest's memory regions and the UFFD descriptor, and
@@ -181,8 +183,8 @@ cache, so that the next wake's handler copies them from memory. The warm matters
 sleep there writes the file into the ARC, ZFS's own cache, and leaves none of it in the page cache,
 so each block the handler copies faults through ZFS.
 
-A wake touches a small part of the file. So the warm reads only the blocks that the imp's last wake
-served, which keeps the page cache copy within the cap, and not every data block of the file.
+A wake touches a small part of the file, so the warm reads only the blocks that the imp's last wake
+served. That keeps the copy in the page cache within the cap.
 
 ### The record of the blocks a wake served
 
