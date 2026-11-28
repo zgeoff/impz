@@ -5,8 +5,10 @@ large page size the CPU maps with one page table entry. A guest on huge pages ta
 faults and fewer TLB misses, so a template restore reaches a running agent sooner. Restore and wake
 run through a page handler: a small process per imp that serves each page of the snapshot as the
 guest first touches it. The owner turns huge pages on for the whole host, and off is the default. An
-elastic imp always runs on the host's ordinary pages, because a shrink exists to return memory to
-the host, and a pool page goes back only to the pool ([elastic memory](./elastic-memory.md)).
+elastic imp never takes the pool, because a shrink exists to return memory to the host, and a pool
+page goes back only to the pool ([elastic memory](./elastic-memory.md)). It can run on the host's
+transparent huge pages instead, as [the section below](#transparent-huge-pages-for-elastic-imps)
+describes.
 
 The pool is memory the host reserves for huge pages at boot or through `vm.nr_hugepages`, and no
 other process can use it. impd only reads the pool's size; the host's own config sets it, as
@@ -26,6 +28,62 @@ keeps the key it would have with huge pages off.
 A wake follows the snapshot. A snapshot on huge pages wakes on huge pages while the setting is on.
 With the setting off, the host may have no pool, so the snapshot wakes on ordinary pages from its
 memory file, and impd records the imp as on ordinary pages from then on.
+
+## Transparent huge pages for elastic imps
+
+An elastic imp's cold boot asks the host for transparent huge pages (THP), which need no pool and no
+page handler. Firecracker's `huge_pages: "Transparent"` makes it call `madvise(MADV_HUGEPAGE)` on
+the guest's memory, and the host kernel backs each touched huge-page range with one huge page when
+it can, and with ordinary pages when it cannot. A host that sets THP to `madvise`, as hosts usually
+do, gives huge pages to only the memory that asks for them. The guest's memory stays anonymous
+memory, with a plain `Rss` in the host's accounting.
+
+THP matters most at boot. A guest on ordinary pages spends its first moments initialising the
+deferred pages that the kernel zeroes one by one, and a large first fill of memory faults in every
+page. On a host that measured it, a guest on THP booted and filled memory about as fast as one on
+the pool, and many times faster than one on ordinary pages.
+
+impd picks THP at each cold boot, and the pick works with `IMP_HUGE_PAGES` on or off:
+
+| Imp                                                    | `IMP_HUGE_PAGES=2M` | `IMP_HUGE_PAGES=off` |
+| ------------------------------------------------------ | ------------------- | -------------------- |
+| fixed memory, a whole number of huge pages             | the pool            | ordinary pages       |
+| elastic, memory a whole number of huge pages           | THP                 | THP                  |
+| any imp whose memory is no whole number of huge pages  | ordinary pages      | ordinary pages       |
+| elastic, with `IMP_ELASTIC_TRANSPARENT_HUGE_PAGES=off` | ordinary pages      | ordinary pages       |
+
+Firecracker refuses a huge-page guest whose memory is no whole number of huge pages, so such an imp
+boots on ordinary pages, and the client refuses to send a machine config that breaks the rule. The
+rest of an elastic guest's memory is aligned already: the hot-plug region is a whole number of
+slots, and virtio-mem plugs and unplugs blocks of one huge page, so each unplug drops a whole huge
+page.
+
+THP covers a cold boot only. Firecracker does not combine THP with UFFD, and a snapshot restore from
+a memory file drops the `madvise` hint, so an elastic imp that sleeps and wakes continues on
+ordinary pages, and impd records that in its VM identity. The wake sends `huge_pages: "None"` in its
+snapshot load, as it does for a snapshot from the pool that wakes with the pool off. The imp gets
+THP again at its next cold boot, so an imp that wakes often keeps THP only until its first sleep.
+
+THP is ordinary memory for the governor. It admits, counts and shrinks the imp on the ordinary
+budget with no pool pages ([RAM](#ram)), and the pool stays free for imps of fixed memory.
+
+`IMP_ELASTIC_TRANSPARENT_HUGE_PAGES=off` takes every elastic imp back to ordinary pages at its next
+cold boot ([the configuration guide](../../guides/configuration.md#impd)). To see what the host did,
+read the `booted pid` line, which ends with the host's `/proc/vmstat` counts for the boot:
+
+```text
+booted pid 4211 spawn=58ms ... ; host stall cpu=12ms io=0ms memory=0ms steal=0ms thp_fault_alloc=312 thp_fault_fallback=0 compact_stall=0
+```
+
+| Field                 | Meaning                                                                          |
+| --------------------- | -------------------------------------------------------------------------------- |
+| `thp_fault_alloc=`    | the huge pages the host handed out during the boot, to every process on the host |
+| `thp_fault_fallback=` | the faults that wanted a huge page and got ordinary pages, because none was free |
+| `compact_stall=`      | the times a process stalled while the host compacted memory for a huge page      |
+
+The counts are host-wide, so a busy host shows other processes' faults too. A `thp_fault_fallback`
+that grows with the load means the host's free memory is too fragmented to back the guests with huge
+pages. A host without `/proc/vmstat` leaves the fields out, and the boot goes on.
 
 ## The page handler
 
@@ -139,6 +197,9 @@ stopped the memory file's warm after 12ms: the imp woke
 ```
 
 ## RAM
+
+An elastic imp on THP holds no pool pages, so the governor admits it, and counts what it holds, on
+the ordinary budget alone, as it does for an imp on ordinary pages.
 
 Pool pages are not anonymous memory and not file pages, so the governor reads each VM's hugetlb
 count beside its proportional set size and counts it as owned, resident and unshared
