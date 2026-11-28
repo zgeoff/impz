@@ -94,7 +94,7 @@ test("#startUffdHandler hands the handler a zeroed file of the memory file's blo
     stopPid(pid);
   });
 
-  expect([...readFileSync(paths.uffdTouchedFile)]).toStrictEqual([0]);
+  expect([...readFileSync(paths.uffdTouchedFile)]).toStrictEqual([0, 0, 0, 0]);
 });
 
 test('#startUffdHandler lets the handler mark the blocks it serves in the file it hands over', async () => {
@@ -103,11 +103,12 @@ test('#startUffdHandler lets the handler mark the blocks it serves in the file i
   const handler = createStubUffdHandler(ctx.directoryPath);
   const memFile = join(ctx.directoryPath, 'mem');
 
-  // three 2 MiB blocks
+  // five 2 MiB blocks
   writeFileSync(memFile, 'guest pages');
-  truncateSync(memFile, 5 * 1024 * 1024);
+  truncateSync(memFile, 10 * 1024 * 1024);
 
-  handler.answerWarm({ touches: [0, 2] });
+  // the faults that testdata/touched.golden holds, in the Go handler's test
+  handler.answerWarm({ touches: [3, 0, 3, 1] });
 
   const pid = await startUffdHandler({
     handlerBin: handler.path,
@@ -121,7 +122,11 @@ test('#startUffdHandler lets the handler mark the blocks it serves in the file i
     stopPid(pid);
   });
 
-  expect([...readFileSync(paths.uffdTouchedFile)]).toStrictEqual([1, 0, 1]);
+  expect(readFileSync(paths.uffdTouchedFile)).toStrictEqual(
+    readFileSync(
+      new URL('../../../../../host/uffd-handler/testdata/touched.golden', import.meta.url),
+    ),
+  );
 });
 
 test('#startUffdHandler hands a jailed imp handler the jail user', async () => {

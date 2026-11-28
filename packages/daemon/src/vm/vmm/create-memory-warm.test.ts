@@ -22,7 +22,22 @@ function setupTest() {
 
   onTestFinished(() => warm.stopAll());
 
-  return { directoryPath: directory, logs, handler, warm };
+  // the file the handler leaves for a wake that served the given number of
+  // blocks, in block order: a uint32 per block, its first-fault ordinal
+  const writeRecord = (blocks: number): string => {
+    const path = join(directory, 'mem.touched');
+    const raw = Buffer.alloc(blocks * 4);
+
+    for (let block = 0; block < blocks; block += 1) {
+      raw.writeUInt32LE(block + 1, block * 4);
+    }
+
+    writeFileSync(path, raw);
+
+    return path;
+  };
+
+  return { directoryPath: directory, logs, handler, warm, writeRecord };
 }
 
 test('it warms a memory file whose data fills the cap, and logs its time and blocks', async () => {
@@ -216,31 +231,62 @@ test('it warms only the recorded blocks, and logs their count', async () => {
   const memFile = join(ctx.directoryPath, 'mem');
   const blockList = join(ctx.directoryPath, 'mem.touched');
 
-  writeFileSync(blockList, Buffer.alloc(64, 1));
-
+  ctx.writeRecord(64);
   ctx.warm.start({ impID: 'imp-1', name: 'dev', memFile, blockList });
 
   await waitFor(() => {
     expect(ctx.logs).toSatisfyAny((line: string) =>
-      /^INFO impd\.imps imp=dev warmed 64 recorded blocks of the memory file in \d+ms$/u.test(line),
+      /^INFO impd\.imps imp=dev warmed 64 of 64 recorded blocks \(128 of 128 MiB\) in \d+ms$/u.test(
+        line,
+      ),
     );
   });
 
   expect(
-    ctx.handler.readWarmRuns().map((run) => [run.mode, run.blockList, run.memFile]),
+    ctx.handler.readWarmRuns().map((run) => [run.mode, run.blockList, run.memFile, run.limit]),
   ).toStrictEqual([
-    ['--count-blocks', blockList, memFile],
-    ['--warm-blocks', blockList, memFile],
+    ['--count-blocks', blockList, memFile, undefined],
+    ['--warm-blocks', blockList, memFile, 128],
   ]);
 });
 
-test('it leaves cold a recorded set that passes the cap, and logs the size it compared', async () => {
+test('it warms the first blocks of a recorded set that passes the cap, and logs how many', async () => {
+  const ctx = setupTest();
+  const memFile = join(ctx.directoryPath, 'mem');
+  const blockList = join(ctx.directoryPath, 'mem.touched');
+
+  ctx.writeRecord(245);
+  ctx.warm.start({ impID: 'imp-1', name: 'dev', memFile, blockList });
+
+  await waitFor(() => {
+    expect(ctx.logs).toSatisfyAny((line: string) =>
+      /^INFO impd\.imps imp=dev warmed 128 of 245 recorded blocks \(256 of 490 MiB\) in \d+ms$/u.test(
+        line,
+      ),
+    );
+  });
+
+  expect(ctx.handler.readWarmRuns().map((run) => [run.mode, run.limit])).toStrictEqual([
+    ['--count-blocks', undefined],
+    ['--warm-blocks', 128],
+  ]);
+});
+
+test('it leaves cold a recorded set when not one block fits the cap', async () => {
   const ctx = setupTest();
   const blockList = join(ctx.directoryPath, 'mem.touched');
 
-  writeFileSync(blockList, Buffer.alloc(129, 1));
+  ctx.writeRecord(3);
 
-  ctx.warm.start({
+  const warm = createMemoryWarm({
+    handlerBin: ctx.handler.path,
+    capMib: 1,
+    run: runCommand,
+  });
+
+  onTestFinished(() => warm.stopAll());
+
+  warm.start({
     impID: 'imp-1',
     name: 'dev',
     memFile: join(ctx.directoryPath, 'mem'),
@@ -249,11 +295,37 @@ test('it leaves cold a recorded set that passes the cap, and logs the size it co
 
   await waitFor(() => {
     expect(ctx.logs).toContain(
-      'INFO impd.imps imp=dev left the memory file cold: its 258 MiB of recorded blocks pass the warm cap of 256 MiB',
+      'INFO impd.imps imp=dev left the memory file cold: not one of its 3 recorded blocks of 2 MiB fits the warm cap of 1 MiB',
     );
   });
 
   expect(ctx.handler.readWarmRuns().map((run) => run.mode)).toStrictEqual(['--count-blocks']);
+});
+
+test('it counts the whole file when the handler refuses a record of one byte per block', async () => {
+  const ctx = setupTest();
+  const memFile = join(ctx.directoryPath, 'mem');
+  const blockList = join(ctx.directoryPath, 'mem.touched');
+
+  // the record that impd 7.10.0's handler wrote: a byte per block
+  writeFileSync(blockList, Buffer.from([1, 0, 1]));
+
+  ctx.handler.answerWarm({ blocks: 5 });
+  ctx.warm.start({ impID: 'imp-1', name: 'dev', memFile, blockList });
+
+  await waitFor(() => {
+    expect(ctx.logs).toSatisfyAny((line: string) =>
+      /^INFO impd\.imps imp=dev warmed the whole memory file in \d+ms: 5 blocks of 2 MiB$/u.test(
+        line,
+      ),
+    );
+  });
+
+  expect(ctx.handler.readWarmRuns().map((run) => run.mode)).toStrictEqual([
+    '--count-blocks',
+    '--count-data',
+    '--warm',
+  ]);
 });
 
 test('it counts the whole file when the handler refuses the recorded blocks', async () => {

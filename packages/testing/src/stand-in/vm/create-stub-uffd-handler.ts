@@ -20,6 +20,7 @@ const WarmRunSchema = z.object({
   mode: z.enum(['--count-data', '--warm', '--count-blocks', '--warm-blocks']),
   memFile: z.string(),
   blockList: z.string().optional(),
+  limit: z.int().optional(),
   pid: z.int(),
 });
 

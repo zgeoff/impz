@@ -24,10 +24,13 @@ function setupTest() {
 test("#keepTouchedBlocks keeps the handler run's blocks beside the memory file, as written", () => {
   const ctx = setupTest();
 
-  writeFileSync(ctx.paths.uffdTouchedFile, Buffer.from([0, 1, 1, 0, 1]));
+  writeFileSync(ctx.paths.uffdTouchedFile, Buffer.from([0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0]));
   keepTouchedBlocks(ctx.paths);
 
-  expect([...readFileSync(ctx.paths.memTouched)]).toStrictEqual([0, 1, 1, 0, 1]);
+  expect([...readFileSync(ctx.paths.memTouched)]).toStrictEqual([
+    0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0,
+  ]);
+
   expect(existsSync(`${ctx.paths.memTouched}.new`)).toBeFalse();
 });
 
