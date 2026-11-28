@@ -184,16 +184,22 @@ sleep there writes the file into the ARC, ZFS's own cache, and leaves none of it
 so each block the handler copies faults through ZFS.
 
 A wake touches a small part of the file, so the warm reads only the blocks that the imp's last wake
-served. That keeps the copy in the page cache within the cap.
+served, in the order of their first fault, and stops before it passes the cap. The blocks a wake
+needs before the imp is ready come first, so the cap is a budget that those blocks fill.
 
 ### The record of the blocks a wake served
 
-Each wake's handler marks every block it serves, one block per huge page, in a file of one byte per
-block, which impd gives it as descriptor 5. When the imp sleeps, impd keeps the file as
-`snapshot/mem.touched`, beside the new memory file, so that it outlives the handler's run directory
-and an impd restart. A sleep drops the earlier record before it writes the new memory file. So the
-record always describes the file beside it, and a cold-booted imp, whose handler never ran, has
-none. Removing the snapshot removes the record.
+Each wake's handler numbers every block it serves, one block per huge page, in a file of one
+little-endian uint32 per block, which impd gives it as descriptor 5. An entry of 0 is a block that
+no fault was served from, and any other entry is the 1-based order in which the handler first served
+a fault from that block. A second fault of a block keeps its number. The handler serves faults until
+Firecracker exits, so the record also holds the blocks the guest touched after it was ready, and
+they come last. A record of one byte per block, which impd 7.10.0 wrote, is the wrong size, so the
+handler refuses it. When the imp sleeps, impd keeps the file as `snapshot/mem.touched`, beside the
+new memory file, so that it outlives the handler's run directory and an impd restart. A sleep drops
+the earlier record before it writes the new memory file. So the record always describes the file
+beside it, and a cold-booted imp, whose handler never ran, has none. Removing the snapshot removes
+the record.
 
 ### The warm
 
@@ -202,18 +208,22 @@ none. Removing the snapshot removes the record.
    served. With a record, impd runs `uffd-handler --count-blocks "$RECORD" "$MEMORY_FILE"`, which
    counts the blocks on the record that hold data in the new file. With no record, it runs
    `uffd-handler --count-data "$MEMORY_FILE"`, which counts every block of the file that holds data.
-   When the handler refuses the record, as a binary built before the record does, impd counts the
-   whole file as though no record existed.
-2. impd multiplies that count by the huge page size and compares the result with the cap that
-   `IMP_WARM_CAP_MIB` sets ([the configuration guide](../../guides/configuration.md#impd)). A set
-   that holds more stays cold, so that one large imp never pushes the other imps' warmed files out
-   of the page cache.
-3. For a count within the cap, impd runs the same program with
-   `uffd-handler --warm-blocks "$RECORD" "$MEMORY_FILE"` or `uffd-handler --warm "$MEMORY_FILE"`,
-   which reads each of those blocks through a map of the file, as a wake's handler reads it. The
-   recorded warm turns off the kernel's readahead on that map, which would otherwise read the blocks
-   beside a recorded one and pass the cap. A read with `pread` does not warm: on ZFS it fills the
-   ARC, not the page cache.
+   When the handler refuses the record, as a binary built before the record does or for a record of
+   the old size, impd counts the whole file as though no record existed.
+2. impd divides the cap that `IMP_WARM_CAP_MIB` sets
+   ([the configuration guide](../../guides/configuration.md#impd)) by the huge page size, which is
+   the number of blocks it may warm. A whole file whose data blocks pass that number stays cold, so
+   that one large imp never pushes the other imps' warmed files out of the page cache. A record that
+   passes it does not stay cold: the warm reads its first blocks, in the order of their first fault,
+   until the next block would pass the cap. A record stays cold only when not one of its blocks
+   fits.
+3. impd runs the same program with `uffd-handler --warm-blocks "$RECORD" "$MEMORY_FILE" $LIMIT`,
+   where `$LIMIT` is the number of blocks the cap allows, or with
+   `uffd-handler --warm "$MEMORY_FILE"` for a whole file. The program reads each block through a map
+   of the file, as a wake's handler reads it: a recorded warm reads the blocks on the record that
+   hold data in the new file, in record order, up to the limit. The recorded warm turns off the
+   kernel's readahead on that map, which would otherwise read the blocks beside a recorded one and
+   pass the cap. A read with `pread` does not warm: on ZFS it fills the ARC, not the page cache.
 
 A wake, a stop or a destroy of the imp ends its warm first. impd's own stop ends every warm and
 starts none after it. impd runs at most two warms at once, and a third waits for one of them to end.
@@ -221,13 +231,14 @@ The kernel can take back the page cache that a warm filled, because nothing lock
 after that reads cold.
 
 impd logs the outcome of each warm in the journal, on a line with the imp's name. The line says
-whether the warm read the recorded blocks or the whole file, and which size it compared with the
-cap:
+whether the warm read the recorded blocks or the whole file, how many of the recorded blocks it
+read, and which size it compared with the cap:
 
 ```text
-warmed 64 recorded blocks of the memory file in 41ms
+warmed 64 of 64 recorded blocks (128 of 128 MiB) in 41ms
+warmed 128 of 245 recorded blocks (256 of 490 MiB) in 180ms
 warmed the whole memory file in 41ms: 27 blocks of 2 MiB
-left the memory file cold: its 258 MiB of recorded blocks pass the warm cap of 256 MiB
+left the memory file cold: not one of its 3 recorded blocks of 2 MiB fits the warm cap of 1 MiB
 left the memory file cold: its 3862 MiB of data pass the warm cap of 2048 MiB
 stopped the memory file's warm after 12ms: the imp woke
 ```

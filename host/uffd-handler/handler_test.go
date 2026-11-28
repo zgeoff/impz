@@ -150,7 +150,7 @@ func TestServeFaultMarksTheBlockBeforeItsCopy(t *testing.T) {
 	_, err = h.serveFault(0x10000)
 
 	assert.ErrorContains(t, err, "UFFDIO_COPY")
-	assert.DeepEqual(t, touched.mapped, []byte{1})
+	assert.DeepEqual(t, touched.mapped, []byte{1, 0, 0, 0})
 }
 
 func TestNewHandlerRefusesRegionsOfMixedPageSizes(t *testing.T) {

@@ -295,7 +295,7 @@ func TestRunMarksTheBlocksItServesInTheTouchedFile(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
 
 	assert.NilError(t, err)
-	assert.DeepEqual(t, raw, []byte{1})
+	assert.DeepEqual(t, raw, []byte{1, 0, 0, 0})
 }
 
 func TestTheHandlerMarksTheBlocksItServesInTheFileImpdPassesAsDescriptor5(t *testing.T) {
@@ -324,7 +324,7 @@ func TestTheHandlerMarksTheBlocksItServesInTheFileImpdPassesAsDescriptor5(t *tes
 	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
 
 	assert.NilError(t, err)
-	assert.DeepEqual(t, raw, []byte{1})
+	assert.DeepEqual(t, raw, []byte{1, 0, 0, 0})
 }
 
 func TestTouchedBlocksMarkTheBlockOfAnOffset(t *testing.T) {
@@ -343,7 +343,59 @@ func TestTouchedBlocksMarkTheBlockOfAnOffset(t *testing.T) {
 
 	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
 	assert.NilError(t, err)
-	assert.DeepEqual(t, raw, []byte{1, 1, 0, 0, 1})
+	assert.DeepEqual(t, raw, []byte{
+		1, 0, 0, 0,
+		2, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		3, 0, 0, 0,
+	})
+}
+
+func TestTouchedBlocksKeepTheOrdinalOfABlockItsFirstFaultTook(t *testing.T) {
+	dir := t.TempDir()
+	file, err := os.Create(filepath.Join(dir, "uffd.touched"))
+	assert.NilError(t, err)
+	touched, err := openTouchedBlocks(file, 3*warmBlock)
+	assert.NilError(t, err)
+	t.Cleanup(touched.close)
+
+	touched.mark(2 * warmBlock)
+	touched.mark(0)
+	touched.mark(2*warmBlock + 4096)
+	touched.mark(0)
+	touched.mark(warmBlock)
+
+	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
+	assert.NilError(t, err)
+	assert.DeepEqual(t, raw, []byte{
+		2, 0, 0, 0,
+		3, 0, 0, 0,
+		1, 0, 0, 0,
+	})
+}
+
+func TestTouchedBlocksTakeANewOrdinalForABlockThatWasUnmarked(t *testing.T) {
+	dir := t.TempDir()
+	file, err := os.Create(filepath.Join(dir, "uffd.touched"))
+	assert.NilError(t, err)
+	touched, err := openTouchedBlocks(file, 3*warmBlock)
+	assert.NilError(t, err)
+	t.Cleanup(touched.close)
+
+	assert.Equal(t, touched.mark(0), true)
+	assert.Equal(t, touched.mark(0), false)
+	touched.unmark(0)
+	assert.Equal(t, touched.mark(warmBlock), true)
+	assert.Equal(t, touched.mark(0), true)
+
+	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
+	assert.NilError(t, err)
+	assert.DeepEqual(t, raw, []byte{
+		3, 0, 0, 0,
+		2, 0, 0, 0,
+		0, 0, 0, 0,
+	})
 }
 
 func TestARunWithNoTouchedFileMarksNothing(t *testing.T) {
@@ -445,4 +497,30 @@ func TestParseOptionsRefusesBadArguments(t *testing.T) {
 			assert.ErrorContains(t, err, tc.want)
 		})
 	}
+}
+
+// impd's tests read testdata/touched.golden too
+// (packages/daemon/src/vm/vmm/start-uffd-handler.test.ts), so a change to the
+// layout on either side fails a test. The faults are blocks 3, 0, 3 and 1 of a
+// memory file of five.
+func TestTouchedBlocksWriteTheLayoutImpdReads(t *testing.T) {
+	dir := t.TempDir()
+	file, err := os.Create(filepath.Join(dir, "uffd.touched"))
+	assert.NilError(t, err)
+	touched, err := openTouchedBlocks(file, 5*warmBlock)
+	assert.NilError(t, err)
+	t.Cleanup(touched.close)
+
+	for _, block := range []int64{3, 0, 3, 1} {
+		touched.mark(block * warmBlock)
+	}
+
+	written, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
+	assert.NilError(t, err)
+	golden, err := os.ReadFile(filepath.Join("testdata", "touched.golden"))
+	assert.NilError(t, err)
+	assert.DeepEqual(t, written, golden)
+	read, err := readTouchedBlocks(filepath.Join("testdata", "touched.golden"), 5*warmBlock)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, read, []int64{3 * warmBlock, 0, warmBlock})
 }

@@ -1389,7 +1389,7 @@ test("it warms only the blocks a 2M imp's last wake served when its sleep kept a
   await ctx.client.imps.sleep({ name: 'dev' });
 
   await ctx.awaitWarmLine(
-    /^INFO impd\.imps imp=dev warmed 1 recorded blocks of the memory file in \d+ms$/u,
+    /^INFO impd\.imps imp=dev warmed 1 of 1 recorded blocks \(2 of 2 MiB\) in \d+ms$/u,
   );
 
   expect(
@@ -1402,7 +1402,7 @@ test("it warms only the blocks a 2M imp's last wake served when its sleep kept a
     ['--warm-blocks', paths.memTouched, paths.memFile],
   ]);
 
-  expect([...readFileSync(paths.memTouched)]).toStrictEqual([1]);
+  expect([...readFileSync(paths.memTouched)]).toStrictEqual([1, 0, 0, 0]);
 });
 
 test("it warms from the record a restarted impd finds beside a 2M imp's memory file", async () => {
@@ -1432,7 +1432,7 @@ test("it warms from the record a restarted impd finds beside a 2M imp's memory f
   await ctx.client.imps.sleep({ name: 'dev' });
 
   await ctx.awaitWarmLine(
-    /^INFO impd\.imps imp=dev warmed 1 recorded blocks of the memory file in \d+ms$/u,
+    /^INFO impd\.imps imp=dev warmed 1 of 1 recorded blocks \(2 of 2 MiB\) in \d+ms$/u,
   );
 
   expect(
@@ -1469,7 +1469,7 @@ test("it drops a 2M imp's record when a later sleep replaces the memory file wit
   await ctx.client.imps.sleep({ name: 'dev' });
 
   await ctx.awaitWarmLine(
-    /^INFO impd\.imps imp=dev warmed 1 recorded blocks of the memory file in \d+ms$/u,
+    /^INFO impd\.imps imp=dev warmed 1 of 1 recorded blocks \(2 of 2 MiB\) in \d+ms$/u,
   );
 
   await ctx.client.imps.wake({ name: 'dev' });
