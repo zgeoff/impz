@@ -1,6 +1,16 @@
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  fstatSync,
+  ftruncateSync,
+  readFileSync,
+  writeSync,
+} from 'node:fs';
 import { parseArgs } from 'node:util';
 import { StubWarmAnswerSchema } from './stub-warm-answer-schema';
+
+const MEM_FILE_FD = 3;
+const TOUCHED_FILE_FD = 5;
 
 // the wrapper passes the mode, the record file and the warm answer file first,
 // then the options the real handler's flag parser takes, in either of its forms
@@ -42,6 +52,8 @@ if (memFile === undefined) {
     process.exit(1);
   }
 
+  markTouchedBlocks(readAnswer().touches);
+
   // the memory file reaches the handler as descriptor 3, as impd passes it
   appendFileSync(
     record,
@@ -63,8 +75,7 @@ if (memFile === undefined) {
 } else {
   const isWarm = warmedFile !== undefined || warmedBlocksList !== undefined;
   const warmMode = pickWarmMode(blockList !== undefined, isWarm);
-  const answerText = existsSync(answerFile) ? readFileSync(answerFile, 'utf8') : '{}';
-  const answer = StubWarmAnswerSchema.parse(JSON.parse(answerText));
+  const answer = readAnswer();
 
   appendFileSync(
     `${record}.warms`,
@@ -88,4 +99,39 @@ function pickWarmMode(
   }
 
   return isWarm ? '--warm' : '--count-data';
+}
+
+function readAnswer() {
+  const answerText = existsSync(answerFile) ? readFileSync(answerFile, 'utf8') : '{}';
+
+  return StubWarmAnswerSchema.parse(JSON.parse(answerText));
+}
+
+// as the real handler does: sizes descriptor 5 to a byte per 2 MiB block of the
+// memory file, zeroed, and marks the blocks it served
+function markTouchedBlocks(touches: readonly number[]): void {
+  const blockBytes = 2 * 1024 * 1024;
+  const blocks = Math.ceil(fstatSync(MEM_FILE_FD).size / blockBytes);
+
+  // a spawn that passes no descriptor 5 leaves the runtime's own, which is no regular file
+  if (!probeRegularFile(TOUCHED_FILE_FD)) {
+    return;
+  }
+
+  ftruncateSync(TOUCHED_FILE_FD, 0);
+  ftruncateSync(TOUCHED_FILE_FD, blocks);
+
+  for (const block of touches) {
+    if (block < blocks) {
+      writeSync(TOUCHED_FILE_FD, Uint8Array.of(1), 0, 1, block);
+    }
+  }
+}
+
+function probeRegularFile(fd: number): boolean {
+  try {
+    return fstatSync(fd).isFile();
+  } catch {
+    return false;
+  }
 }

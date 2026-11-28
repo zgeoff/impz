@@ -50,6 +50,16 @@ test('#keepTouchedBlocks drops a stale record when the imp ran no handler', () =
   expect(existsSync(ctx.paths.memTouched)).toBeFalse();
 });
 
+test('#keepTouchedBlocks keeps no record of a handler that left its file empty', () => {
+  const ctx = setupTest();
+
+  writeFileSync(ctx.paths.memTouched, Buffer.from([1, 1, 1]));
+  writeFileSync(ctx.paths.uffdTouchedFile, Buffer.alloc(0));
+  keepTouchedBlocks(ctx.paths);
+
+  expect(existsSync(ctx.paths.memTouched)).toBeFalse();
+});
+
 test('#keepTouchedBlocks logs a record it cannot keep, and leaves none', () => {
   const ctx = setupTest();
 

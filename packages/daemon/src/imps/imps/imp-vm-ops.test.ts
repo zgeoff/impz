@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { StubVmError } from '@impz/testing/stand-in/vm/build-stub-vmm';
@@ -10,6 +10,7 @@ import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
 import { createImp, listImps, readImpByName, updateImpActivity } from '../../platform/db/list-imps';
 import { updateImpState } from '../../platform/db/update-imp-state';
+import { stopPid } from '../../platform/process/read-stat-fields';
 import { buildMockNewImp } from '../../test-utils/imps/build-mock-new-imp';
 import { createTestImpdPool } from '../../test-utils/imps/create-test-impd-pool';
 import { readBrokenInvariants } from '../../test-utils/imps/read-broken-invariants';
@@ -20,6 +21,8 @@ import { writeTestSnapshot } from '../../test-utils/vm/write-test-snapshot';
 import { readSnapshotMeta, writeSnapshotMeta } from '../../vm/sleep/snapshot-meta';
 import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import { buildImpPaths } from '../../vm/storage/build-imp-paths';
+import type { ImpPaths } from '../../vm/storage/build-imp-paths';
+import { removeUffdFiles, startUffdHandler } from '../../vm/vmm/start-uffd-handler';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -42,7 +45,34 @@ async function setupTest() {
     },
   });
 
-  return Object.assign(harness, { hugePool, kernel });
+  // the fake wake starts no page handler, so this starts the stub through
+  // startUffdHandler, as a wake's start does, and the stub marks the blocks it
+  // serves in the file impd hands it
+  const wakeOnAHandlerThatServes = async (paths: ImpPaths): Promise<void> => {
+    await harness.client.imps.wake({ name: 'dev' });
+
+    removeUffdFiles(paths);
+
+    const pid = await startUffdHandler({
+      handlerBin: harness.uffdHandler.path,
+      paths,
+      memFile: paths.memFile,
+      jail: null,
+      cgroup: null,
+    });
+
+    onTestFinished(() => {
+      stopPid(pid);
+    });
+  };
+
+  const awaitWarmLine = async (line: RegExp, count = 1): Promise<void> => {
+    await waitFor(() => {
+      expect(harness.logs.filter((entry) => line.test(entry))).toHaveLength(count);
+    });
+  };
+
+  return Object.assign(harness, { hugePool, kernel, wakeOnAHandlerThatServes, awaitWarmLine });
 }
 
 test('it lets a restore waiting for admission past the governor sleeping its imp', async () => {
@@ -1341,7 +1371,7 @@ test("it warms only the blocks a 2M imp's last wake served when its sleep kept a
   ctx.hugePool.totalMib = 4096;
   ctx.hugePool.freeMib = 4096;
 
-  ctx.uffdHandler.answerWarm({ blocks: 7 });
+  ctx.uffdHandler.answerWarm({ blocks: 7, touches: [0] });
 
   await ctx.createTestImage('ubuntu');
 
@@ -1349,21 +1379,167 @@ test("it warms only the blocks a 2M imp's last wake served when its sleep kept a
 
   const paths = buildImpPaths(ctx.dataDir, created.id);
 
-  mkdirSync(paths.runDir, { recursive: true });
-  writeFileSync(paths.uffdTouchedFile, Buffer.from([1, 0, 1]));
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await ctx.awaitWarmLine(
+    /^INFO impd\.imps imp=dev warmed the whole memory file in \d+ms: 7 blocks/u,
+  );
+
+  await ctx.wakeOnAHandlerThatServes(paths);
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await ctx.awaitWarmLine(
+    /^INFO impd\.imps imp=dev warmed 7 recorded blocks of the memory file in \d+ms$/u,
+  );
+
+  expect(
+    ctx.uffdHandler
+      .readWarmRuns()
+      .slice(2)
+      .map((run) => [run.mode, run.blockList, run.memFile]),
+  ).toStrictEqual([
+    ['--count-blocks', paths.memTouched, paths.memFile],
+    ['--warm-blocks', paths.memTouched, paths.memFile],
+  ]);
+
+  expect([...readFileSync(paths.memTouched)]).toStrictEqual([1]);
+});
+
+test("it warms from the record a restarted impd finds beside a 2M imp's memory file", async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const ctx = await setupTest();
+
+  ctx.hugePool.totalMib = 4096;
+  ctx.hugePool.freeMib = 4096;
+
+  ctx.uffdHandler.answerWarm({ blocks: 7, touches: [0] });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await ctx.awaitWarmLine(
+    /^INFO impd\.imps imp=dev warmed the whole memory file in \d+ms: 7 blocks/u,
+  );
+
+  await ctx.wakeOnAHandlerThatServes(paths);
+  await ctx.restartImpd();
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await ctx.awaitWarmLine(
+    /^INFO impd\.imps imp=dev warmed 7 recorded blocks of the memory file in \d+ms$/u,
+  );
+
+  expect(
+    ctx.uffdHandler
+      .readWarmRuns()
+      .slice(2)
+      .map((run) => run.mode),
+  ).toStrictEqual(['--count-blocks', '--warm-blocks']);
+});
+
+test("it drops a 2M imp's record when a later sleep replaces the memory file with no handler run", async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const ctx = await setupTest();
+
+  ctx.hugePool.totalMib = 4096;
+  ctx.hugePool.freeMib = 4096;
+
+  ctx.uffdHandler.answerWarm({ blocks: 7, touches: [0] });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await ctx.awaitWarmLine(
+    /^INFO impd\.imps imp=dev warmed the whole memory file in \d+ms: 7 blocks/u,
+  );
+
+  await ctx.wakeOnAHandlerThatServes(paths);
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await ctx.awaitWarmLine(
+    /^INFO impd\.imps imp=dev warmed 7 recorded blocks of the memory file in \d+ms$/u,
+  );
+
+  await ctx.client.imps.wake({ name: 'dev' });
+
+  // a cold boot starts no handler, and a VM start clears the last run's files
+  removeUffdFiles(paths);
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await ctx.awaitWarmLine(
+    /^INFO impd\.imps imp=dev warmed the whole memory file in \d+ms: 7 blocks/u,
+    2,
+  );
+
+  expect(existsSync(paths.memTouched)).toBeFalse();
+
+  expect(
+    ctx.uffdHandler
+      .readWarmRuns()
+      .slice(4)
+      .map((run) => [run.mode, run.blockList]),
+  ).toStrictEqual([
+    ['--count-data', undefined],
+    ['--warm', undefined],
+  ]);
+});
+
+test("it stops a 2M imp's running warm of recorded blocks when the imp wakes", async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const ctx = await setupTest();
+
+  ctx.hugePool.totalMib = 4096;
+  ctx.hugePool.freeMib = 4096;
+
+  ctx.uffdHandler.answerWarm({ blocks: 7, touches: [0] });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await ctx.awaitWarmLine(
+    /^INFO impd\.imps imp=dev warmed the whole memory file in \d+ms: 7 blocks/u,
+  );
+
+  await ctx.wakeOnAHandlerThatServes(paths);
+
+  ctx.uffdHandler.answerWarm({ blocks: 7, hangs: true, touches: [0] });
 
   await ctx.client.imps.sleep({ name: 'dev' });
 
   await waitFor(() => {
-    expect(ctx.logs).toSatisfyAny((line: string) =>
-      /^INFO impd\.imps imp=dev warmed 7 recorded blocks of the memory file in \d+ms$/u.test(line),
-    );
+    expect(ctx.uffdHandler.readWarmRuns()).toHaveLength(4);
   });
 
-  expect(ctx.uffdHandler.readWarmRuns().map((run) => [run.mode, run.blockList])).toStrictEqual([
-    ['--count-blocks', paths.memTouched],
-    ['--warm-blocks', paths.memTouched],
-  ]);
+  const warmPid = ctx.uffdHandler.readWarmRuns()[3]?.pid ?? 0;
+
+  await ctx.client.imps.wake({ name: 'dev' });
+
+  expect(probeProcessRunning(warmPid)).toBeFalse();
+
+  expect(ctx.logs).toSatisfyAny((line: string) =>
+    /^INFO impd\.imps imp=dev stopped the memory file's warm after \d+ms: the imp woke$/u.test(
+      line,
+    ),
+  );
 });
 
 test('it warms by default the memory file of a 2M imp of 2 GiB whose data fills most of it', async () => {

@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"runtime"
+
+	"golang.org/x/sys/unix"
 )
 
 // warmBlock is the page the guest's memory is served in on the 2 MiB path,
@@ -70,6 +72,12 @@ func runWarm(req warmRequest, out io.Writer) error {
 			return err
 		}
 		blocks = intersect(blocks, listed)
+	}
+	if req.mode == warmBlocks {
+		// the kernel would read ahead into the blocks that the list leaves out
+		if err := unix.Madvise(source.mapped, unix.MADV_RANDOM); err != nil {
+			return fmt.Errorf("memory file: madvise: %w", err)
+		}
 	}
 	if req.mode == warm || req.mode == warmBlocks {
 		source.readThroughMap(blocks, os.Getpagesize())

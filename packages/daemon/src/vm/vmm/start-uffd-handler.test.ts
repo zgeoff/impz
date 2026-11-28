@@ -6,6 +6,7 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
+  truncateSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -72,7 +73,7 @@ test('#startUffdHandler starts the handler on the imp socket with the memory fil
   expect(readHandlerState(paths)).toStrictEqual({ state: 'alive', pid });
 });
 
-test("#startUffdHandler hands the handler an empty file to mark the blocks it serves in, and removes the last run's", async () => {
+test("#startUffdHandler hands the handler a zeroed file of the memory file's blocks as descriptor 5, and removes the last run's", async () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');
   const handler = createStubUffdHandler(ctx.directoryPath);
@@ -93,7 +94,34 @@ test("#startUffdHandler hands the handler an empty file to mark the blocks it se
     stopPid(pid);
   });
 
-  expect(readFileSync(paths.uffdTouchedFile)).toHaveLength(0);
+  expect([...readFileSync(paths.uffdTouchedFile)]).toStrictEqual([0]);
+});
+
+test('#startUffdHandler lets the handler mark the blocks it serves in the file it hands over', async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+  const memFile = join(ctx.directoryPath, 'mem');
+
+  // three 2 MiB blocks
+  writeFileSync(memFile, 'guest pages');
+  truncateSync(memFile, 5 * 1024 * 1024);
+
+  handler.answerWarm({ touches: [0, 2] });
+
+  const pid = await startUffdHandler({
+    handlerBin: handler.path,
+    paths,
+    memFile,
+    jail: null,
+    cgroup: null,
+  });
+
+  onTestFinished(() => {
+    stopPid(pid);
+  });
+
+  expect([...readFileSync(paths.uffdTouchedFile)]).toStrictEqual([1, 0, 1]);
 });
 
 test('#startUffdHandler hands a jailed imp handler the jail user', async () => {

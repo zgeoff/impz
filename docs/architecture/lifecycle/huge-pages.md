@@ -186,12 +186,12 @@ served, which keeps the page cache copy within the cap, and not every data block
 
 ### The record of the blocks a wake served
 
-Each wake's handler marks every 2 MiB block it serves in a file of one byte per block, which impd
-gives it as descriptor 5. When the imp sleeps, impd keeps the file as `snapshot/mem.touched`, beside
-the new memory file, so that it outlives the handler's run directory and an impd restart. A sleep
-drops the earlier record before it writes the new memory file. So the record always describes the
-file beside it, and a cold-booted imp, whose handler never ran, has none. Removing the snapshot
-removes the record.
+Each wake's handler marks every block it serves, one block per huge page, in a file of one byte per
+block, which impd gives it as descriptor 5. When the imp sleeps, impd keeps the file as
+`snapshot/mem.touched`, beside the new memory file, so that it outlives the handler's run directory
+and an impd restart. A sleep drops the earlier record before it writes the new memory file. So the
+record always describes the file beside it, and a cold-booted imp, whose handler never ran, has
+none. Removing the snapshot removes the record.
 
 ### The warm
 
@@ -203,9 +203,11 @@ removes the record.
    `IMP_WARM_CAP_MIB` sets ([the configuration guide](../../guides/configuration.md#impd)). A set
    that holds more stays cold, so that one large imp never pushes the other imps' warmed files out
    of the page cache.
-3. For a count within the cap, impd runs the same program with `--warm-blocks <record>` or `--warm`,
-   which reads each of those blocks through a map of the file, as a wake's handler reads it. A read
-   with `pread` does not warm: on ZFS it fills the ARC, not the page cache.
+3. For a count within the cap, impd runs the same program with
+   `--warm-blocks <record> <memory file>` or `--warm <memory file>`, which reads each of those
+   blocks through a map of the file, as a wake's handler reads it. The recorded warm turns off the
+   kernel's readahead on that map, which would otherwise read the blocks beside a recorded one and
+   pass the cap. A read with `pread` does not warm: on ZFS it fills the ARC, not the page cache.
 
 A wake, a stop or a destroy of the imp ends its warm first. impd's own stop ends every warm and
 starts none after it. impd runs at most two warms at once, and a third waits for one of them to end.

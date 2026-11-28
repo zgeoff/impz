@@ -139,6 +139,38 @@ func TestRunWarmOfBlocksReadsOnlyTheListedDataBlocks(t *testing.T) {
 	assert.DeepEqual(t, []int{cached[0], cached[2]}, []int{0, perBlock})
 }
 
+// writeContiguousMemFile writes a memory file of five 2 MiB blocks that all
+// hold data, so no hole ends the data that a read of one block can run into.
+func writeContiguousMemFile(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/var/tmp", "uffd-warm-")
+	assert.NilError(t, err)
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	path := filepath.Join(dir, "mem")
+	file, err := os.Create(path)
+	assert.NilError(t, err)
+	defer file.Close()
+	_, err = file.Write(bytesOf('a', 5*warmBlock))
+	assert.NilError(t, err)
+	assert.NilError(t, file.Sync())
+	assert.NilError(t, unix.Fadvise(int(file.Fd()), 0, 0, unix.FADV_DONTNEED))
+	return path
+}
+
+func TestRunWarmOfBlocksReadsNothingBesideTheListedBlocks(t *testing.T) {
+	path := writeContiguousMemFile(t)
+	perBlock := warmBlock / os.Getpagesize()
+	list := filepath.Join(t.TempDir(), "mem.touched")
+	assert.NilError(t, os.WriteFile(list, []byte{0, 0, 1, 0, 0}, 0o600))
+	var out bytes.Buffer
+
+	err := runWarm(warmRequest{mode: warmBlocks, blockList: list, memFile: path}, &out)
+
+	assert.NilError(t, err)
+	assert.Equal(t, out.String(), "{\"blocks\":1}\n")
+	assert.DeepEqual(t, countCachedPages(t, path), []int{0, 0, perBlock, 0, 0})
+}
+
 func TestRunCountBlocksCountsTheListedDataBlocksWithNoRead(t *testing.T) {
 	path := writeSleptMemFile(t)
 	list := writeBlockList(t, 1, 1, 0)

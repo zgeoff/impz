@@ -211,10 +211,12 @@ func (h *handler) serveFault(address uint64) (copyResult, error) {
 		src: uint64(uintptr(unsafe.Pointer(&source[0]))),
 		len: h.pageSize,
 	}
+	// the mark comes first: the guest runs from the copy on, so a snapshot can
+	// end this process before any line after it
+	h.touched.mark(offset)
 	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(h.uffd), uffdioCopy, uintptr(unsafe.Pointer(&arg)))
 	switch {
 	case errno == 0:
-		h.touched.mark(offset)
 		return served, nil
 	case errno == unix.EEXIST:
 		return copiedAlready, nil
