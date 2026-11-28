@@ -163,6 +163,15 @@ func writeStatsFile(t *testing.T, dir string) *os.File {
 	return file
 }
 
+// writeTouchedFile writes the empty file that impd hands the handler to mark
+// the blocks it serves in.
+func writeTouchedFile(t *testing.T, dir string) *os.File {
+	t.Helper()
+	file, err := os.OpenFile(filepath.Join(dir, "uffd.touched"), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
+	assert.NilError(t, err)
+	return file
+}
+
 func bytesOf(b byte, n int) []byte {
 	out := make([]byte, n)
 	for i := range out {

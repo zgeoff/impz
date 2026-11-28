@@ -26,8 +26,8 @@ const memFileFD = 3
 // impd reads the handler's counts for a wake from this descriptor's file.
 const statsFD = 4
 
-// impd may pass a file, as this descriptor, for the handler to mark the blocks
-// it serves in, and keeps it for the next sleep's warm.
+// impd passes a file as this descriptor, for the handler to mark the blocks it
+// serves in, and keeps it for the next sleep's warm.
 const touchedFD = 5
 
 // Firecracker connects during its snapshot load, which impd sends right after
@@ -55,22 +55,14 @@ func main() {
 
 	opts, err := parseOptions(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE 4<>STATS_FILE [5<>TOUCHED_FILE]\n       uffd-handler --count-data|--warm MEMORY_FILE\n       uffd-handler --count-blocks|--warm-blocks BLOCK_LIST MEMORY_FILE\n", err)
+		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE 4<>STATS_FILE 5<>TOUCHED_FILE\n       uffd-handler --count-data|--warm MEMORY_FILE\n       uffd-handler --count-blocks|--warm-blocks BLOCK_LIST MEMORY_FILE\n", err)
 		os.Exit(2)
 	}
 
-	if err := run(opts, os.NewFile(memFileFD, "memory file"), os.NewFile(statsFD, "stats file"), openOptionalFD(touchedFD, "touched file")); err != nil {
+	if err := run(opts, os.NewFile(memFileFD, "memory file"), os.NewFile(statsFD, "stats file"), os.NewFile(touchedFD, "touched file")); err != nil {
 		fmt.Fprintf(os.Stderr, "uffd-handler: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-// openOptionalFD wraps a descriptor that impd may not have passed, or nil.
-func openOptionalFD(fd uintptr, name string) *os.File {
-	if _, err := unix.FcntlInt(fd, unix.F_GETFD, 0); err != nil {
-		return nil
-	}
-	return os.NewFile(fd, name)
 }
 
 func parseOptions(args []string) (options, error) {
