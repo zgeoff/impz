@@ -11,8 +11,13 @@ test('#TEMPLATE_BOOT_ARGS is the cmdline the agent reads as a template (agent/in
   );
 });
 
-test('#TEMPLATE_BOOT_ARGS quiets the kernel console, so templates built without it get a new key', () => {
-  expect(TEMPLATE_BOOT_ARGS.split(' ')).toContain('quiet');
+test('#buildTemplateKey differs from the key a template built before the quiet console got', () => {
+  // the start of that key, from the boot args without quiet
+  const keyStartBeforeQuietConsole = '494b00d6b2ab4b48';
+
+  expect(buildTemplateKey(buildMockHostIdentity(), { vcpus: 1, memoryMib: 512 })).not.toStartWith(
+    keyStartBeforeQuietConsole,
+  );
 });
 
 test('#buildTemplateKey changes with each thing a restore inherits', () => {

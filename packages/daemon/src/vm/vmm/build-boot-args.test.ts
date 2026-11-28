@@ -27,11 +27,11 @@ test('#buildBootArgs builds the kernel cmdline with the slot addressing', () => 
       jail: null,
     }),
   ).toBe(
-    'console=ttyS0 quiet reboot=k panic=1 pci=off i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd root=/dev/vdb rootfstype=squashfs ro init=/imp-agent imp.id=id imp.hostname=dev imp.ip=10.66.0.14/30 imp.gw=10.66.0.13 imp.dns=1.1.1.1,8.8.8.8',
+    'console=ttyS0 quiet loglevel=5 reboot=k panic=1 pci=off i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd root=/dev/vdb rootfstype=squashfs ro init=/imp-agent imp.id=id imp.hostname=dev imp.ip=10.66.0.14/30 imp.gw=10.66.0.13 imp.dns=1.1.1.1,8.8.8.8',
   );
 });
 
-test('#buildBootArgs quiets the kernel console but keeps ttyS0 for panics and warnings', () => {
+test('#buildBootArgs quiets the kernel console but keeps warnings on ttyS0', () => {
   const address = deriveSlotAddress(3, { subnet: parseSubnet('10.66.0.0/16'), portBase: 20_000 });
 
   const tokens = buildBootArgs({
@@ -52,6 +52,7 @@ test('#buildBootArgs quiets the kernel console but keeps ttyS0 for panics and wa
   }).split(' ');
 
   expect(tokens).toContain('quiet');
+  expect(tokens.indexOf('loglevel=5')).toBeGreaterThan(tokens.indexOf('quiet'));
   expect(tokens).toContain('console=ttyS0');
 });
 
