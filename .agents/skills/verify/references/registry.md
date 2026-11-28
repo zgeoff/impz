@@ -22,8 +22,8 @@ in `create-verify-registry.ts`.
   and destroy an imp. It also holds each file that impd reads but that you can't trace to a journey.
   Each entry has a comment on why it is there.
 - the feature's `packages`, each a package folder that its journey runs whole, such as
-  `packages/cli`, with the folder of each workspace package it depends on at run time.
-  `feature-paths.ts` reads the dependencies from each `package.json` when it loads.
+  `packages/cli`. List only the folder: `feature-paths.ts` adds the folder of each workspace package
+  it depends on at run time, from each `package.json` as it loads.
 - the feature's `paths`, the globs for the parts of a package that its journey runs, such as the
   event routes in `packages/daemon`. List only the globs: `feature-paths.ts` adds the folders of
   that package's workspace dependencies itself, as for a package in `packages`.
@@ -40,9 +40,11 @@ the change flags.
 
 ## Features on a real VM
 
-A feature that runs on `local-kvm` holds the `vm` list in `feature-paths.ts`, what only a real VM
-runs, and the code of its own journey. Its journey runs the rest of impd too, but a change to the
-rest of impd gets its verdict from the features on `local`.
+A feature that runs on `local-kvm` holds the `vm` list in `feature-paths.ts` and the impd folders of
+its own journey, such as `packages/daemon/src/imps/exec/` for an exec. The `vm` list holds what a
+stand-in VM never runs, such as the guest agent, the kernel and the image a journey boots. Its
+journey runs the rest of impd too, but a change to the rest of impd gets its verdict from the
+features on `local`, which start in seconds where a real VM takes over a minute.
 
 ## Add a path
 
@@ -69,6 +71,8 @@ rest of impd gets its verdict from the features on `local`.
 
    Fix the glob or the entry named in the failure, and run the test again. When you move a path on
    purpose, change the features that the test expects for its sample file.
+
+4. Run `bun verify lint`, and fix each failure it reports.
 
 Put the features and the globs in any order. A changed file that no ignore glob matches counts for
 every feature whose glob matches it. The order of the features sets only the row order of
