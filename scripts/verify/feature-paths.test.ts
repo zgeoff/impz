@@ -44,18 +44,18 @@ test('it asks for the verify skill before an edit to each file that a feature or
 test.each([
   {
     path: 'packages/cli/src/commands/events-command.ts',
-    flagged: ['api-lifecycle', 'cli-create-exec'],
-  },
-  {
-    path: 'packages/daemon/src/surface/create-event-routes.ts',
-    flagged: ['api-lifecycle', 'mcp-reads'],
-  },
-  {
-    path: 'packages/daemon/src/platform/events/open-event-stream.ts',
-    flagged: ['api-lifecycle', 'mcp-reads'],
+    flagged: ['api-lifecycle', 'mcp-scope', 'mcp-reads', 'cli-create-exec'],
   },
   {
     path: 'packages/daemon/src/surface/create-image-routes.ts',
+    flagged: ['mcp-reads'],
+  },
+  {
+    path: 'packages/daemon/src/surface/to-api-image.ts',
+    flagged: ['mcp-reads'],
+  },
+  {
+    path: 'packages/daemon/src/platform/events/read-event-page.ts',
     flagged: ['mcp-reads'],
   },
   {
@@ -103,6 +103,8 @@ test.each([
   'packages/daemon/src/surface/create-imp-routes.ts',
   'packages/daemon/src/identity/auth/access-policy.ts',
   'packages/daemon/src/platform/events/event-bus.ts',
+  'packages/daemon/src/platform/events/open-event-stream.ts',
+  'packages/daemon/src/surface/create-event-routes.ts',
   'packages/testing/src/stand-in/start-test-impd.ts',
   'packages/client/src/index.ts',
   'packages/api/src/index.ts',
@@ -117,6 +119,8 @@ test.each([
   'packages/daemon/src/vm/sleep/snapshot-meta.ts',
   'packages/agent-protocol/src/index.ts',
   'scripts/verify/create-verify-registry.ts',
+  'scripts/impz',
+  'scripts/lib/repo-root.ts',
 ])('it flags every feature for %s', async (path) => {
   const ctx = await setupTest();
 

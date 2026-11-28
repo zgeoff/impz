@@ -13,6 +13,9 @@ export const corePaths = {
     // the client that every action, and impd's MCP route, sends its calls with
     'packages/client',
 
+    // the CLI, which `bun verify up` runs to log in and to start `impz events` before any journey
+    'packages/cli',
+
     // the operations and reconcilers that run each create and destroy
     'packages/durable',
 
@@ -37,10 +40,10 @@ export const corePaths = {
     // parts that only a real VM runs sit here too, because the stand-in VMs run impd's VM layer
     'packages/daemon/src/{host-net,imp-ops,impd,imps,network,vm}/**',
 
-    // the database, the audit log, the errors, the HTTP helpers and the event log that each
-    // create writes
+    // the database, the audit log, the errors, the HTTP helpers, the event log that each create
+    // writes, and the event stream that `impz events` reads from the start of each run
     'packages/daemon/src/platform/{audit,db,errors,http,principal,process,secrets,telemetry}/**',
-    'packages/daemon/src/platform/events/event-bus.ts',
+    'packages/daemon/src/platform/events/{build-cursor-event,create-event-check,event-bus,open-event-stream,pick-stream-start}.ts',
 
     // the root token that every action signs in with, and the access rules every call passes
     'packages/daemon/src/identity/*.ts',
@@ -48,8 +51,12 @@ export const corePaths = {
 
     // the API app and its router, the imp routes that every journey calls, and the other routes,
     // which start-up loads and no journey can be traced away from
-    'packages/daemon/src/surface/{build-api-listen-options,build-audit-routes,build-caller-imps,find-imp-refusal,get-raw-socket,read-buffered-amount,read-error-code,read-host-info,require-named-imp,surface-config,to-api-image,to-orpc-error,with-retry-after}.ts',
-    'packages/daemon/src/surface/create-{app,backup-routes,checkpoint-routes,dashboard-routes,exec-routes,exec-sockets,file-routes,grant-routes,identity-routes,imp-routes,implementer,lease-routes,move-routes,network-routes,router,secret-routes,service-routes,session-routes,socket-registry,system-routes,token-routes,tunnel-socket-route}.ts',
+    'packages/daemon/src/surface/{build-api-listen-options,build-audit-routes,build-caller-imps,find-imp-refusal,get-raw-socket,read-api-event,read-buffered-amount,read-error-code,read-host-info,require-named-imp,surface-config,to-orpc-error,with-retry-after}.ts',
+    'packages/daemon/src/surface/create-{app,backup-routes,checkpoint-routes,dashboard-routes,event-routes,exec-routes,exec-sockets,file-routes,grant-routes,identity-routes,imp-routes,implementer,lease-routes,move-routes,network-routes,router,secret-routes,service-routes,session-routes,socket-registry,system-routes,token-routes,tunnel-socket-route}.ts',
     'packages/daemon/src/surface/{auth,dashboard,exec,images,moves,ssh}/**',
+
+    // the launcher that runs this checkout's CLI, and the repo root it finds
+    'scripts/impz',
+    'scripts/lib/repo-root.ts',
   ],
 } as const;

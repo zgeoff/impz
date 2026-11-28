@@ -16,19 +16,10 @@ interface FeatureReach {
 }
 
 // The CLI imports the MCP server at start for `impz mcp`, and impd for its /mcp route, but only an
-// MCP journey calls it. The walk never adds it, and each MCP feature names it.
+// MCP journey calls it. No walk adds it, and each MCP feature names it.
 const namedOnlyFolders = ['packages/mcp'];
 
 const workspace = await readWorkspace(join(import.meta.dir, '..', '..'));
-
-// the event stream that `impz events` and the MCP `imp_event_list` read
-const eventReads: FeatureReach = {
-  packages: [],
-  paths: [
-    'packages/daemon/src/surface/{create-event-routes,read-api-event}.ts',
-    'packages/daemon/src/platform/events/{build-cursor-event,create-event-check,open-event-stream,pick-stream-start,read-event-page}.ts',
-  ],
-};
 
 // the MCP server, the public MCP route, and the OAuth sign-in of its service client
 const mcpRoute: FeatureReach = {
@@ -63,16 +54,18 @@ const vm = [
 // packages those depend on, from each `package.json` as this file loads, and the parts of packages
 // they name. The features on a real VM hold what only a real VM runs, and their own code.
 export const featurePaths = {
-  'api-lifecycle': buildFeatureGlobs(
-    workspace,
-    buildJoinedReach(eventReads, { packages: ['packages/cli'], paths: [] }),
-  ),
+  'api-lifecycle': buildFeatureGlobs(workspace, { packages: [], paths: [] }),
   'mcp-scope': buildFeatureGlobs(workspace, mcpRoute),
   'mcp-reads': buildFeatureGlobs(
     workspace,
-    buildJoinedReach(mcpRoute, eventReads, {
+    buildJoinedReach(mcpRoute, {
       packages: [],
-      paths: ['packages/daemon/src/surface/create-image-routes.ts'],
+      paths: [
+        // the image list and the page of the event log that `imp_image_list` and
+        // `imp_event_list` read
+        'packages/daemon/src/surface/{create-image-routes,to-api-image}.ts',
+        'packages/daemon/src/platform/events/read-event-page.ts',
+      ],
     }),
   ),
   'cli-create-exec': [...vm, 'packages/cli/**', 'packages/daemon/src/imps/exec/**'],
@@ -132,10 +125,16 @@ function collectOwnerFolders(
 async function readWorkspace(rootDir: string): Promise<Workspace> {
   const packages = await readWorkspacePackages(rootDir);
 
+  const splitFolders = collectOwnerFolders(corePaths.globs, packages);
+
   return {
     packages,
-    coreFolders: collectReachedFolders(corePaths.packages, packages, new Set()),
-    splitFolders: collectOwnerFolders(corePaths.globs, packages),
+    coreFolders: collectReachedFolders(
+      corePaths.packages,
+      packages,
+      new Set([...splitFolders, ...namedOnlyFolders]),
+    ),
+    splitFolders,
   };
 }
 

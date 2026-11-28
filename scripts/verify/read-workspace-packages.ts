@@ -7,10 +7,10 @@ const packageJSONSchema = z.object({
   dependencies: z.record(z.string(), z.string()).optional(),
 });
 
-// The `@impz/*` packages, each with the names of the workspace packages it depends on at run time,
-// so a dev dependency, such as a test helper package, joins no feature.
+// The `@impz/*` packages, scripts included, each with the names of the workspace packages it
+// depends on at run time, so a dev dependency, such as a test helper package, joins no feature.
 export async function readWorkspacePackages(rootDir: string): Promise<WorkspacePackage[]> {
-  const glob = new Bun.Glob('packages/*/package.json');
+  const glob = new Bun.Glob('{packages/*,scripts}/package.json');
 
   const packages: WorkspacePackage[] = [];
 

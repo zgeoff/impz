@@ -1,8 +1,8 @@
 # The verify registry
 
 The registry, [`create-verify-registry.ts`](../../../../scripts/verify/create-verify-registry.ts),
-takes its globs from two files. When SKILL.md says to add a glob to a feature's `paths`, to
-`.shared()` or to `.ignore()`, add it to one of the lists in these files:
+takes its globs from two files. To add a glob to a feature's `paths`, to `.shared()` or to
+`.ignore()`, as SKILL.md directs, add it to one of the lists in these files:
 
 - [`feature-paths.ts`](../../../../scripts/verify/feature-paths.ts) holds `featurePaths`, each
   feature's `paths`; `sharedPaths`, which the registry passes to `.shared()`; and `ignoredPaths`,
@@ -18,25 +18,27 @@ in `create-verify-registry.ts`.
 `featurePaths` builds the `paths` of each feature that runs on `local` from these lists:
 
 - `corePaths`, the packages and globs that every journey on `local` runs: the `local` app in
-  `packages/testing`, the API contract, the client, and the parts of impd that create, list, sleep
-  and destroy an imp. It also holds each file that impd reads but that you can't trace to a journey.
-  Each entry has a comment on why it is there.
+  `packages/testing`, the API contract, the client, the CLI that `bun verify up` logs in with and
+  runs `impz events` with, and the parts of impd that create, list, sleep and destroy an imp. It
+  also holds each file that impd reads but that you can't trace to a journey. Comment each entry
+  with why it is there.
 - the feature's `packages`, each a package folder that its journey runs whole, such as
-  `packages/cli`. List only the folder: `feature-paths.ts` adds the folder of each workspace package
+  `packages/mcp`. List only the folder: `feature-paths.ts` adds the folder of each workspace package
   it depends on at run time, from each `package.json` as it loads.
 - the feature's `paths`, the globs for the parts of a package that its journey runs, such as the
-  event routes in `packages/daemon`. List only the globs: `feature-paths.ts` adds the folders of
+  image routes in `packages/daemon`. List only the globs: `feature-paths.ts` adds the folders of
   that package's workspace dependencies itself, as for a package in `packages`.
 
-When `feature-paths.ts` adds dependency folders, it never adds a package that `corePaths` splits
-into globs, such as `packages/daemon`, as a whole folder. It also never adds `packages/mcp`: the CLI
-and impd import it at start, but only an MCP journey calls it. Name `packages/mcp` in the `packages`
-of each feature whose journey calls an MCP tool.
+When `feature-paths.ts` adds dependency folders, for a feature or for `corePaths`, it never adds a
+package that `corePaths` splits into globs, such as `packages/daemon`, as a whole folder. It also
+never adds `packages/mcp`: the CLI and impd import it at start, but only an MCP journey calls it.
+Name `packages/mcp` in the `packages` of each feature whose journey calls an MCP tool.
 
-A journey reaches a path when its actions, its reads or the CLI commands it runs run that path. impd
-loads every route and the MCP server at start, and `bun verify doctor` runs before every journey,
-but neither puts a path in a feature. A change that breaks the start still fails each journey that
-the change flags.
+A journey reaches a path when its actions, its reads or the CLI commands it runs run that path, and
+so does each step that `bun verify up` runs before any journey, such as `impz login`. impd loads
+every route and the MCP server at start, and `bun verify doctor` runs before every journey, but
+neither puts a path in a feature. A change that breaks the start still fails each journey that the
+change flags.
 
 ## Features on a real VM
 
@@ -63,7 +65,7 @@ features on `local`, which start in seconds where a real VM takes over a minute.
    `{ "match": "packages/cli/**", "skills": ["verify"] }`. With the entry, the skill-gate hook
    blocks an edit to a matching file until the agent loads this skill. The hook is a separate check
    from `bun verify gate`. For a glob you remove, delete an entry that only it used.
-3. Run `bun run test scripts/verify/feature-paths.test.ts`. Expect: the test passes. It fails when:
+3. Run `bun run test scripts/verify/feature-paths.test.ts`. The test fails when:
    - a tracked file that a feature or `sharedPaths` holds matches no `verify` entry in
      `skill-gate.json`;
    - a sample file flags other features than the test expects;
