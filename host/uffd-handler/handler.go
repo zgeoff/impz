@@ -49,8 +49,10 @@ type handler struct {
 	pageSize uint64
 	source   *memSource
 	stats    *handlerStats
-	data     map[int64]bool
-	zero     []byte
+	// nil when impd keeps no record of the blocks served
+	touched *touchedBlocks
+	data    map[int64]bool
+	zero    []byte
 	// the ranges the guest gave back, which the kernel zero-fills from then on
 	removed []uffdMsg
 }
@@ -212,6 +214,7 @@ func (h *handler) serveFault(address uint64) (copyResult, error) {
 	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(h.uffd), uffdioCopy, uintptr(unsafe.Pointer(&arg)))
 	switch {
 	case errno == 0:
+		h.touched.mark(offset)
 		return served, nil
 	case errno == unix.EEXIST:
 		return copiedAlready, nil
