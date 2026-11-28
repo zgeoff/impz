@@ -178,9 +178,8 @@ Name each imp you create `wv-<name>`, or `wv-mcp-<name>` to reach it over MCP. D
 
 <!-- repo: registry -->
 
-The registry is [create-verify-registry.ts](../../../scripts/verify/create-verify-registry.ts).
-[feature-paths.ts](../../../scripts/verify/feature-paths.ts) holds each feature's `paths` and the
-registry's one `.ignore` list.
+The registry is [create-verify-registry.ts](../../../scripts/verify/create-verify-registry.ts). Read
+[the registry](references/registry.md) before you add a feature or a glob.
 
 <!-- /repo -->
 
