@@ -89,7 +89,7 @@ func runWarm(req warmRequest, out io.Writer) error {
 		blocks = intersect(data, listed)
 	}
 	if req.mode == warmBlocks {
-		blocks = blocks[:min(len(blocks), req.limit)]
+		blocks = firstBlocks(blocks, req.limit)
 		// the kernel would read ahead into the blocks that the list leaves out
 		if err := unix.Madvise(source.mapped, unix.MADV_RANDOM); err != nil {
 			return fmt.Errorf("memory file: madvise: %w", err)
@@ -111,6 +111,11 @@ func intersect(data map[int64]bool, listed []int64) []int64 {
 		}
 	}
 	return kept
+}
+
+// firstBlocks is the first limit of the blocks, in their order.
+func firstBlocks(blocks []int64, limit int) []int64 {
+	return blocks[:min(len(blocks), limit)]
 }
 
 // readThroughMap faults in each page of the blocks through the map, as the

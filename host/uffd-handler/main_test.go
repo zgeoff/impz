@@ -375,6 +375,29 @@ func TestTouchedBlocksKeepTheOrdinalOfABlockItsFirstFaultTook(t *testing.T) {
 	})
 }
 
+func TestTouchedBlocksTakeANewOrdinalForABlockThatWasUnmarked(t *testing.T) {
+	dir := t.TempDir()
+	file, err := os.Create(filepath.Join(dir, "uffd.touched"))
+	assert.NilError(t, err)
+	touched, err := openTouchedBlocks(file, 3*warmBlock)
+	assert.NilError(t, err)
+	t.Cleanup(touched.close)
+
+	assert.Equal(t, touched.mark(0), true)
+	assert.Equal(t, touched.mark(0), false)
+	touched.unmark(0)
+	assert.Equal(t, touched.mark(warmBlock), true)
+	assert.Equal(t, touched.mark(0), true)
+
+	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
+	assert.NilError(t, err)
+	assert.DeepEqual(t, raw, []byte{
+		3, 0, 0, 0,
+		2, 0, 0, 0,
+		0, 0, 0, 0,
+	})
+}
+
 func TestARunWithNoTouchedFileMarksNothing(t *testing.T) {
 	var touched *touchedBlocks
 

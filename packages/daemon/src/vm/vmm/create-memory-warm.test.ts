@@ -353,7 +353,59 @@ test('it counts the whole file when the handler refuses the recorded blocks', as
 
   expect(ctx.logs).toSatisfyAny((line: string) =>
     line.startsWith(
-      'WARNING impd.imps imp=dev the recorded blocks of the memory file cannot be counted, so the whole file is: ',
+      'WARNING impd.imps imp=dev the recorded blocks of the memory file cannot be read, so the whole file is: ',
     ),
   );
+});
+
+test('it counts the whole file when the handler counts a record but refuses to warm its blocks', async () => {
+  const ctx = setupTest();
+  const memFile = join(ctx.directoryPath, 'mem');
+  const blockList = ctx.writeRecord(3);
+
+  ctx.handler.answerWarm({ blocks: 5, refusesWarmBlocks: true });
+  ctx.warm.start({ impID: 'imp-1', name: 'dev', memFile, blockList });
+
+  await waitFor(() => {
+    expect(ctx.logs).toSatisfyAny((line: string) =>
+      /^INFO impd\.imps imp=dev warmed the whole memory file in \d+ms: 5 blocks of 2 MiB$/u.test(
+        line,
+      ),
+    );
+  });
+
+  expect(ctx.handler.readWarmRuns().map((run) => run.mode)).toStrictEqual([
+    '--count-blocks',
+    '--count-data',
+    '--warm',
+  ]);
+});
+
+test('it runs no warm for an empty record, whatever the cap leaves room for', async () => {
+  const ctx = setupTest();
+  const blockList = ctx.writeRecord(0);
+
+  const warm = createMemoryWarm({
+    handlerBin: ctx.handler.path,
+    capMib: 1,
+    run: runCommand,
+  });
+
+  onTestFinished(() => warm.stopAll());
+
+  warm.start({
+    impID: 'imp-1',
+    name: 'dev',
+    memFile: join(ctx.directoryPath, 'mem'),
+    blockList,
+  });
+
+  await waitFor(() => {
+    expect(ctx.logs).toSatisfyAny((line: string) =>
+      /^INFO impd\.imps imp=dev warmed 0 of 0 recorded blocks \(0 of 0 MiB\) in \d+ms$/u.test(line),
+    );
+  });
+
+  expect(ctx.handler.readWarmRuns().map((run) => run.mode)).toStrictEqual(['--count-blocks']);
+  expect(ctx.logs.filter((line: string) => line.startsWith('WARNING'))).toStrictEqual([]);
 });

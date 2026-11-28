@@ -9,6 +9,10 @@ export const StubWarmAnswerSchema = z.object({
 
   // refuses the block list modes, as a handler built before them does
   refusesBlockLists: z.boolean().default(false),
+
+  // refuses only the warm of blocks, as a handler of the release before the limit does: it counts
+  // a record of one byte per block and takes no limit argument
+  refusesWarmBlocks: z.boolean().default(false),
   touches: z.array(z.int().nonnegative()).default([]),
 });
 

@@ -88,6 +88,11 @@ if (memFile === undefined) {
     process.exit(2);
   }
 
+  if (warmedBlocksList !== undefined && (answer.refusesWarmBlocks || Number(limit) < 1)) {
+    process.stderr.write('usage: uffd-handler --warm-blocks <list> <memory file> <limit>\n');
+    process.exit(2);
+  }
+
   appendFileSync(
     `${record}.warms`,
     `${JSON.stringify({

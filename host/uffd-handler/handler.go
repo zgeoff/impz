@@ -213,7 +213,7 @@ func (h *handler) serveFault(address uint64) (copyResult, error) {
 	}
 	// the mark comes first: the guest runs from the copy on, so a snapshot can
 	// end this process before any line after it
-	h.touched.mark(offset)
+	isFirst := h.touched.mark(offset)
 	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(h.uffd), uffdioCopy, uintptr(unsafe.Pointer(&arg)))
 	switch {
 	case errno == 0:
@@ -221,6 +221,11 @@ func (h *handler) serveFault(address uint64) (copyResult, error) {
 	case errno == unix.EEXIST:
 		return copiedAlready, nil
 	case errno == unix.EAGAIN, arg.copy == -int64(unix.EAGAIN):
+		// the retry may find its range removed and copy nothing, so the block
+		// takes its ordinal from the copy that happens
+		if isFirst {
+			h.touched.unmark(offset)
+		}
 		return copyRetry, nil
 	default:
 		return copyRetry, fmt.Errorf("UFFDIO_COPY at %#x: %w", dst, errno)

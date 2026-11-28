@@ -65,21 +65,37 @@ func (t *touchedBlocks) close() {
 
 // mark records that the memory file's block holding offset was served, in the
 // next ordinal when it is the block's first fault. A later fault keeps the
-// block's ordinal.
-func (t *touchedBlocks) mark(offset int64) {
-	if t == nil {
-		return
-	}
-	block := offset / warmBlock
-	if block >= int64(len(t.mapped))/touchedEntry {
-		return
-	}
-	entry := t.mapped[block*touchedEntry : (block+1)*touchedEntry]
-	if binary.LittleEndian.Uint32(entry) != 0 {
-		return
+// block's ordinal. It reports whether this call took an ordinal.
+func (t *touchedBlocks) mark(offset int64) bool {
+	entry := t.entry(offset)
+	if entry == nil || binary.LittleEndian.Uint32(entry) != 0 {
+		return false
 	}
 	binary.LittleEndian.PutUint32(entry, t.next)
 	t.next++
+	return true
+}
+
+// unmark gives back the ordinal that mark took for the block holding offset,
+// for a fault whose copy did not happen, so the block's ordinal comes from the
+// fault that is served. The ordinals stay in order, and a gap in them is fine.
+func (t *touchedBlocks) unmark(offset int64) {
+	if entry := t.entry(offset); entry != nil {
+		binary.LittleEndian.PutUint32(entry, 0)
+	}
+}
+
+// entry is the bytes of the block holding offset, or nil when the file has no
+// such block or no file is kept.
+func (t *touchedBlocks) entry(offset int64) []byte {
+	if t == nil {
+		return nil
+	}
+	block := offset / warmBlock
+	if block >= int64(len(t.mapped))/touchedEntry {
+		return nil
+	}
+	return t.mapped[block*touchedEntry : (block+1)*touchedEntry]
 }
 
 // readTouchedBlocks lists the offsets of the blocks that the file at path

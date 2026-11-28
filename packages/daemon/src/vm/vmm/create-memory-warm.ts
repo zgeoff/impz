@@ -118,35 +118,56 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
     return WarmReportSchema.parse(JSON.parse(stdout)).blocks;
   };
 
-  // a record that the handler refuses, such as one that a newer handler wrote
-  // and an older binary cannot read, counts the same as no record
-  const countBlocks = async (
+  const warmRecorded = async (
     target: Readonly<WarmTarget>,
     signal: AbortSignal,
-  ): Promise<{ scope: WarmScope; blocks: number }> => {
-    if (existsSync(target.blockList)) {
-      try {
-        return {
-          scope: 'recorded',
-          blocks: await readBlocks(RECORDED_MODES.count, target, signal),
-        };
-      } catch (error) {
-        signal.throwIfAborted();
+    startedMs: number,
+  ): Promise<WarmOutcome> => {
+    const recorded = await readBlocks(RECORDED_MODES.count, target, signal);
 
-        getImpdLogger('imps')
-          .with({ imp: target.name })
-          .warning(
-            'the recorded blocks of the memory file cannot be counted, so the whole file is: {error}',
-            {
-              error: getErrorMessage(error),
-            },
-          );
-      }
+    // the cap is a budget for recorded blocks, which warm in first-fault order
+    // until it is spent
+    if (recorded > 0 && budgetBlocks === 0) {
+      return { kind: 'overCap', scope: 'recorded', blocks: recorded };
     }
 
-    return { scope: 'whole', blocks: await readBlocks(WHOLE_MODES.count, target, signal) };
+    // the handler refuses a limit of none, and an empty record has nothing to read
+    const read = recorded === 0 ? 0 : await readBlocks(RECORDED_MODES.warm, target, signal);
+
+    return {
+      kind: 'warmed',
+      scope: 'recorded',
+      blocks: read,
+      scopeBlocks: recorded,
+      warmMs: Math.round(performance.now() - startedMs),
+    };
   };
 
+  // the cap is a gate for a whole file, which has no order to cut at
+  const warmWhole = async (
+    target: Readonly<WarmTarget>,
+    signal: AbortSignal,
+    startedMs: number,
+  ): Promise<WarmOutcome> => {
+    const counted = await readBlocks(WHOLE_MODES.count, target, signal);
+
+    if (counted * BLOCK_MIB > deps.capMib) {
+      return { kind: 'overCap', scope: 'whole', blocks: counted };
+    }
+
+    const read = await readBlocks(WHOLE_MODES.warm, target, signal);
+
+    return {
+      kind: 'warmed',
+      scope: 'whole',
+      blocks: read,
+      scopeBlocks: counted,
+      warmMs: Math.round(performance.now() - startedMs),
+    };
+  };
+
+  // a record that the handler refuses, at its count or at its warm, counts the
+  // same as no record: so does a handler binary that has no limit argument
   const runWarm = async (
     target: Readonly<WarmTarget>,
     signal: AbortSignal,
@@ -154,30 +175,22 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
     const startedMs = performance.now();
 
     try {
-      const counted = await countBlocks(target, signal);
+      if (existsSync(target.blockList)) {
+        try {
+          return await warmRecorded(target, signal, startedMs);
+        } catch (error) {
+          signal.throwIfAborted();
 
-      // the cap is a budget for recorded blocks, which warm in first-fault
-      // order until it is spent, and a gate for a whole file, which has no order
-      const isOver =
-        counted.scope === 'recorded'
-          ? counted.blocks > 0 && budgetBlocks === 0
-          : counted.blocks * BLOCK_MIB > deps.capMib;
-
-      if (isOver) {
-        return { kind: 'overCap', scope: counted.scope, blocks: counted.blocks };
+          getImpdLogger('imps')
+            .with({ imp: target.name })
+            .warning(
+              'the recorded blocks of the memory file cannot be read, so the whole file is: {error}',
+              { error: getErrorMessage(error) },
+            );
+        }
       }
 
-      const modes = counted.scope === 'recorded' ? RECORDED_MODES : WHOLE_MODES;
-
-      const read = await readBlocks(modes.warm, target, signal);
-
-      return {
-        kind: 'warmed',
-        scope: counted.scope,
-        blocks: read,
-        scopeBlocks: counted.blocks,
-        warmMs: Math.round(performance.now() - startedMs),
-      };
+      return await warmWhole(target, signal, startedMs);
     } catch (error) {
       return { kind: 'failed', error: getErrorMessage(error) };
     }

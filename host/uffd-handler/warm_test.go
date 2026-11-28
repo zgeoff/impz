@@ -251,6 +251,31 @@ func TestRunWarmOfBlocksReadsThePrefixThatTheLimitLeaves(t *testing.T) {
 	assert.DeepEqual(t, countCachedPages(t, path), []int{0, perBlock, 0, perBlock, perBlock})
 }
 
+func TestTheBlocksToWarmAreTheFirstDataBlocksOfTheListInItsOrder(t *testing.T) {
+	data := map[int64]bool{0: true, warmBlock: true, 3 * warmBlock: true, 4 * warmBlock: true}
+	// faulted in the order 4, 2 (a hole), 1, 3, 0
+	listed := []int64{4 * warmBlock, 2 * warmBlock, warmBlock, 3 * warmBlock, 0}
+
+	got := firstBlocks(intersect(data, listed), 3)
+
+	assert.DeepEqual(t, got, []int64{4 * warmBlock, warmBlock, 3 * warmBlock})
+}
+
+func TestRunWarmOfBlocksSkipsAHoleBeforeItSpendsTheLimit(t *testing.T) {
+	path := writeSleptMemFile(t)
+	perBlock := warmBlock / os.Getpagesize()
+	// the middle block is a hole that faulted first
+	list := writeBlockList(t, 2, 1, 3)
+	var out bytes.Buffer
+
+	err := runWarm(warmRequest{mode: warmBlocks, blockList: list, limit: 1, memFile: path}, &out)
+
+	assert.NilError(t, err)
+	assert.Equal(t, out.String(), "{\"blocks\":1}\n")
+	cached := countCachedPages(t, path)
+	assert.DeepEqual(t, []int{cached[0], cached[2]}, []int{perBlock, 0})
+}
+
 func TestRunWarmOfBlocksReadsAllOfAShorterListWithinItsLimit(t *testing.T) {
 	path := writeContiguousMemFile(t)
 	list := writeBlockList(t, 1, 0, 2, 0, 0)
