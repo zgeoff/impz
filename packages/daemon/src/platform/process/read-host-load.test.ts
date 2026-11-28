@@ -58,6 +58,24 @@ test('it reads the stall totals of PSI and the steal of /proc/stat in microsecon
     ioStallUs: 902_113,
     memoryStallUs: 1450,
     stealUs: 27_540_000,
+    thpFaultAlloc: null,
+    thpFaultFallback: null,
+    compactStall: null,
+  });
+});
+
+test('it reads the huge page counters of /proc/vmstat', () => {
+  const ctx = setupTest();
+
+  writeFileSync(
+    join(ctx.procRoot, 'vmstat'),
+    'nr_free_pages 4096\nthp_fault_alloc 812\nthp_fault_fallback 4\nthp_fault_fallback_charge 1\ncompact_stall 17\n',
+  );
+
+  expect(readHostLoad(ctx.sources)).toMatchObject({
+    thpFaultAlloc: 812,
+    thpFaultFallback: 4,
+    compactStall: 17,
   });
 });
 
@@ -71,6 +89,9 @@ test('it gives no stall totals on a kernel without PSI', () => {
     ioStallUs: null,
     memoryStallUs: null,
     stealUs: 27_540_000,
+    thpFaultAlloc: null,
+    thpFaultFallback: null,
+    compactStall: null,
   });
 });
 

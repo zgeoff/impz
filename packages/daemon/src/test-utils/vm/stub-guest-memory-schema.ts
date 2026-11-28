@@ -6,7 +6,7 @@ export const StubGuestMemorySchema = z.object({
   isTrackingDirtyPages: z.boolean(),
 
   // a 2M guest's Diff of untracked memory holds the pages mincore(2) finds
-  hugePages: z.enum(['None', '2M']).optional(),
+  hugePages: z.enum(['None', '2M', 'Transparent']).optional(),
   presentPages: z.array(z.number()).optional(),
 });
 

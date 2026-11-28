@@ -129,6 +129,9 @@ test('it logs the host stall that grew while a restore ran, after its guest step
     ioStallUs: 500_000,
     memoryStallUs: 10_000,
     stealUs: 3_000_000,
+    thpFaultAlloc: 10,
+    thpFaultFallback: 0,
+    compactStall: 1,
   });
 
   const restoring = ctx.fake.hold('restore');
@@ -141,6 +144,9 @@ test('it logs the host stall that grew while a restore ran, after its guest step
     ioStallUs: 504_000,
     memoryStallUs: 10_000,
     stealUs: 3_650_000,
+    thpFaultAlloc: 10,
+    thpFaultFallback: 0,
+    compactStall: 1,
   });
 
   restoring.release();
@@ -151,7 +157,7 @@ test('it logs the host stall that grew while a restore ran, after its guest step
     (line: string) =>
       line.startsWith('INFO impd.imps imp=second restored boot template ') &&
       line.endsWith(
-        '; guest claim=3ms mount=40ms; host stall cpu=412ms io=4ms memory=0ms steal=650ms',
+        '; guest claim=3ms mount=40ms; host stall cpu=412ms io=4ms memory=0ms steal=650ms thp_fault_alloc=0 thp_fault_fallback=0 compact_stall=0',
       ),
   );
 });
@@ -184,6 +190,9 @@ test('it logs the host stall that grew while a kernel boot ran, after its guest 
     ioStallUs: 120_000,
     memoryStallUs: 0,
     stealUs: 90_000,
+    thpFaultAlloc: 100,
+    thpFaultFallback: 0,
+    compactStall: 1,
   });
 
   const booting = ctx.fake.hold('boot');
@@ -196,6 +205,9 @@ test('it logs the host stall that grew while a kernel boot ran, after its guest 
     ioStallUs: 1_330_000,
     memoryStallUs: 25_000,
     stealUs: 100_000,
+    thpFaultAlloc: 160,
+    thpFaultFallback: 2,
+    compactStall: 3,
   });
 
   booting.release();
@@ -206,7 +218,7 @@ test('it logs the host stall that grew while a kernel boot ran, after its guest 
     (line: string) =>
       line.startsWith('INFO impd.imps imp=once booted pid ') &&
       line.endsWith(
-        '; guest world=9ms mount=35ms; host stall cpu=3ms io=1210ms memory=25ms steal=10ms',
+        '; guest world=9ms mount=35ms; host stall cpu=3ms io=1210ms memory=25ms steal=10ms thp_fault_alloc=60 thp_fault_fallback=2 compact_stall=2',
       ),
   );
 });

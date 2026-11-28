@@ -29,4 +29,9 @@ export function createStubHostLoad(
     join(procRoot, 'stat'),
     `cpu  1000 0 500 90000 20 0 10 ${String(Math.round(load.stealUs / US_PER_TICK))} 0 0\n`,
   );
+
+  writeFileSync(
+    join(procRoot, 'vmstat'),
+    `thp_fault_alloc ${String(load.thpFaultAlloc)}\nthp_fault_fallback ${String(load.thpFaultFallback)}\ncompact_stall ${String(load.compactStall)}\n`,
+  );
 }

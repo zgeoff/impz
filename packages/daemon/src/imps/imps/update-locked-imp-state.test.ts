@@ -40,7 +40,15 @@ async function setupTest() {
     kernelOops: NO_KERNEL_OOPS,
     readThreadIds: () => null,
     readNetBytes: () => null,
-    readHostLoad: () => ({ cpuStallUs: null, ioStallUs: null, memoryStallUs: null, stealUs: null }),
+    readHostLoad: () => ({
+      cpuStallUs: null,
+      ioStallUs: null,
+      memoryStallUs: null,
+      stealUs: null,
+      thpFaultAlloc: null,
+      thpFaultFallback: null,
+      compactStall: null,
+    }),
     runCommand: () => Promise.resolve({ exitCode: 127, stdout: '', stderr: 'no command here' }),
   });
 
