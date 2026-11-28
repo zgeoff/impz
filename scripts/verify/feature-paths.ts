@@ -1,18 +1,35 @@
-// Globs are root-relative, as `git ls-files` prints them, and match with Bun.Glob. A package is in
-// a feature when the feature's journey runs code in it.
+import { join } from 'node:path';
+import { collectReachedFolders } from './collect-reached-folders.ts';
+import { corePaths } from './core-paths.ts';
+import { readWorkspacePackages } from './read-workspace-packages.ts';
+import type { WorkspacePackage } from './types.ts';
 
-// impd and the packages it loads, which every journey runs: on stand-in VMs on `local`, in a dev
-// instance on `local-kvm`.
-const impd = [
-  'packages/agent-protocol/**',
-  'packages/api/**',
-  'packages/client/**',
-  'packages/daemon/**',
-  'packages/durable/**',
-  'packages/local-tar/**',
-  'packages/mcp/**',
-  'packages/shared/**',
-] as const;
+// Globs are root-relative, as `git ls-files` prints them, and match with Bun.Glob. A part that
+// impd loads at start goes only in the features whose journey runs it: a change that breaks the
+// start still fails each journey it flags.
+interface FeatureReach {
+  // package folders that the journey runs whole, with the workspace packages they depend on
+  readonly packages: readonly string[];
+
+  // the parts of a package that the journey runs, which bring that package's workspace dependencies
+  readonly paths: readonly string[];
+}
+
+// The CLI imports the MCP server at start for `impz mcp`, and impd for its /mcp route, but only an
+// MCP journey calls it. No walk adds it, and each MCP feature names it.
+const namedOnlyFolders = ['packages/mcp'];
+
+const workspace = await readWorkspace(join(import.meta.dir, '..', '..'));
+
+// the MCP server, the public MCP route, and the OAuth sign-in of its service client
+const mcpRoute: FeatureReach = {
+  packages: ['packages/mcp'],
+  paths: [
+    'packages/daemon/src/surface/{mcp,oauth}/**',
+    'packages/daemon/src/surface/create-oauth-routes.ts',
+    'packages/daemon/src/identity/oauth/**',
+  ],
+};
 
 // What only a real VM runs: the guest agent and its protocol, impd's VM layer, the kernel, the host
 // container and its Go programs, the dev instance that `local-kvm` starts, and the image its
@@ -33,14 +50,100 @@ const vm = [
   'packages/daemon/e2e/fixtures/tiny/rootfs/**',
 ] as const;
 
+// The features on `local` hold the core list, the folders of their packages and of the workspace
+// packages those depend on, from each `package.json` as this file loads, and the parts of packages
+// they name. The features on a real VM hold what only a real VM runs, and their own code.
 export const featurePaths = {
-  'api-lifecycle': [...impd, 'packages/testing/**', 'packages/cli/**'],
-  'mcp-scope': [...impd, 'packages/testing/**'],
-  'mcp-reads': [...impd, 'packages/testing/**'],
+  'api-lifecycle': buildFeatureGlobs(workspace, { packages: [], paths: [] }),
+  'mcp-scope': buildFeatureGlobs(workspace, mcpRoute),
+  'mcp-reads': buildFeatureGlobs(
+    workspace,
+    buildJoinedReach(mcpRoute, {
+      packages: [],
+      paths: [
+        // the image list and the page of the event log that `imp_image_list` and
+        // `imp_event_list` read
+        'packages/daemon/src/surface/{create-image-routes,to-api-image}.ts',
+        'packages/daemon/src/platform/events/read-event-page.ts',
+      ],
+    }),
+  ),
   'cli-create-exec': [...vm, 'packages/cli/**', 'packages/daemon/src/imps/exec/**'],
   'sleep-wake': [...vm, 'packages/daemon/src/imps/exec/**'],
   'checkpoint-restore-fork': [...vm, 'packages/daemon/src/imp-ops/checkpoints/**'],
 } as const satisfies Record<string, readonly string[]>;
+
+interface Workspace {
+  readonly packages: readonly WorkspacePackage[];
+  readonly coreFolders: readonly string[];
+  readonly splitFolders: readonly string[];
+}
+
+function buildFeatureGlobs(workspaceFacts: Workspace, reach: FeatureReach): string[] {
+  const ownerFolders = collectOwnerFolders(reach.paths, workspaceFacts.packages);
+
+  const walkSkipped = new Set([
+    ...workspaceFacts.coreFolders,
+    ...workspaceFacts.splitFolders,
+    ...namedOnlyFolders,
+  ]);
+
+  // a split package's other parts run only where a feature names them
+  const partFolders = new Set([...workspaceFacts.splitFolders, ...ownerFolders]);
+
+  const ownFolders = collectReachedFolders(
+    [...reach.packages, ...ownerFolders],
+    workspaceFacts.packages,
+    walkSkipped,
+  ).filter((folder) => !partFolders.has(folder));
+
+  return [
+    ...workspaceFacts.coreFolders.map((folder) => `${folder}/**`),
+    ...corePaths.globs,
+    ...ownFolders.map((folder) => `${folder}/**`),
+    ...reach.paths,
+  ];
+}
+
+// The folder of the package that holds each glob, the deepest when packages nest.
+function collectOwnerFolders(
+  globs: readonly string[],
+  packages: readonly WorkspacePackage[],
+): string[] {
+  const owners = globs.flatMap((glob) => {
+    const holders = packages
+      .map((entry) => entry.folder)
+      .filter((folder) => glob.startsWith(`${folder}/`))
+      .toSorted((first, second) => second.length - first.length);
+
+    return holders.slice(0, 1);
+  });
+
+  return [...new Set(owners)];
+}
+
+async function readWorkspace(rootDir: string): Promise<Workspace> {
+  const packages = await readWorkspacePackages(rootDir);
+
+  const splitFolders = collectOwnerFolders(corePaths.globs, packages);
+
+  return {
+    packages,
+    coreFolders: collectReachedFolders(
+      corePaths.packages,
+      packages,
+      new Set([...splitFolders, ...namedOnlyFolders]),
+    ),
+    splitFolders,
+  };
+}
+
+function buildJoinedReach(...reaches: readonly FeatureReach[]): FeatureReach {
+  return {
+    packages: reaches.flatMap((reach) => reach.packages),
+    paths: reaches.flatMap((reach) => reach.paths),
+  };
+}
 
 // A change to one of these changes every feature: the verify CLI and its targets' apps, and the
 // root manifest, lock file and Bun pin, which decide every package's runtime dependencies.
@@ -54,7 +157,7 @@ export const sharedPaths = [
 // A path that one of these globs matches counts as no change, even where a feature's or a shared
 // glob matches it too.
 export const ignoredPaths = [
-  // 1. No runtime effect: prose and tests. Never `**/*.md`: a package may read markdown at run time.
+  // 1. No runtime effect: prose, tests and test helpers. Never `**/*.md`: a package may read markdown at run time.
   'docs/**',
   '**/README.md',
   '**/CHANGELOG.md',
@@ -65,6 +168,7 @@ export const ignoredPaths = [
   '**/*.test.tsx',
   '**/*_test.go',
   '**/testdata/**',
+  'packages/*/src/**/test-utils/**',
   'packages/e2e-harness/**',
   'packages/daemon/e2e/bunfig.toml',
   'packages/daemon/e2e/fixtures/{git,headscale,ra,ws}/**',
