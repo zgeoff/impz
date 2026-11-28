@@ -12,7 +12,7 @@ impz exec web -- ping db           # by its imp name
 impz exec web -- ping db.lab.internal
 impz net ls                        # NAME  IMPS
 impz net leave lab db              # its connections to web end
-impz net rm lab                    # every member's connections to the others end
+impz net rm lab                    # members that share no other network lose their connections
 ```
 
 `--net` takes a comma-separated list, and each network must exist. Joining twice and leaving a
@@ -23,36 +23,37 @@ network the imp is not on do nothing.
 - Every member reaches every other member on any port, over TCP, UDP and ICMP, whatever either one's
   [egress policy](../architecture/network/egress.md) is. The firewall still holds a `public`, `box`
   or `none` imp to its policy for every address outside the network.
-- A non-member reaches no member, and no member reaches it. A packet between two imps that share no
-  network is refused: TCP gets a reset, the rest ICMP admin-prohibited.
-- IPv4 only: two members do not reach each other over IPv6, and names answer A records only.
+- A non-member imp reaches no member, and no member reaches it. A packet between two imps that share
+  no network is refused: TCP gets a reset, the rest ICMP admin-prohibited.
+- A network carries IPv4 only. Two members do not reach each other over IPv6, and impd answers only
+  A records for their names.
 - A leave, a `net rm` and an `impz rm` take effect at once. A held connection between two imps that
   no longer share a network gets a reset on its next packet, and impd deletes the pair's conntrack
   entries. A pair that still shares another network keeps its connections.
 - A sleeping imp does not wake for a packet from a peer. Hold it (`impz hold`), or wake it first.
 - A fork joins no network: a join is a choice made for each imp. A
   [backup](../architecture/storage/backups.md) keeps each imp's network names, and a restore puts
-  the imp back on them, making any network that is gone.
+  the imp back on them and recreates any network that is gone.
 
 ## A network is a trust boundary
 
 A network weakens the egress policy of a member whenever an imp that reaches more is on it too. An
-`open` peer reaches anything, so it can relay for the others: a proxy, a port forward or a tunnel on
-it carries a box imp's traffic anywhere. A `public` peer does the same to the internet for a `box`
-or `none` member. A `public`, `box` or `none` imp on a network trusts every open peer on it with its
-egress, and a `box` or `none` imp trusts every public peer.
+`open` peer reaches anything outside the network, so it can relay for the others: a proxy, a port
+forward or a tunnel on it carries a box imp's traffic anywhere. A `public` peer does the same to the
+internet for a `box` or `none` member. A `public`, `box` or `none` imp on a network trusts every
+open peer on it with its egress, and a `box` or `none` imp trusts every public peer.
 
 `impz net join` warns when a join puts a `public`, `box` or `none` imp on a network with an `open`
 one, or a `box` or `none` imp with a `public` one, from either side, and `--json` carries the same
 text in `warning`. `impz new --net` and `impz policy` print the same warning on stderr, one for each
-of the imp's networks that mixes them; the API gives them with `networks.warnings`. To keep a box
+of the imp's networks that mixes them; the API returns them in `networks.warnings`. To keep a box
 imp boxed, keep every imp on its networks `box` or `none`.
 
 ## Names
 
 impd answers for the members' names. A guest asks through its usual resolver, `IMP_DNS`: a member's
 queries go to impd, which answers these names itself and never sends them upstream. An `open` imp on
-no network asks `IMP_DNS` directly, as before, and gets its NXDOMAIN from there.
+no network asks `IMP_DNS` directly and gets its NXDOMAIN from there.
 
 | Name                                   | Answer                                                              |
 | -------------------------------------- | ------------------------------------------------------------------- |
@@ -62,12 +63,12 @@ no network asks `IMP_DNS` directly, as before, and gets its NXDOMAIN from there.
 
 - Any other name under `<network>.internal` for a network that exists, or under the reverse zone of
   `IMP_SUBNET`, is NXDOMAIN, the same answer whether the name does not exist or names an imp the
-  asker shares no network with. A guest cannot list imps through it, though it can tell which
-  network names exist.
+  asker shares no network with. A guest cannot use these answers to list imps, though it can tell
+  which network names exist.
 - Every other `.internal` name, such as `metadata.google.internal` or a company's own, is resolved
   as it would be without a network.
-- A bare name that is a peer's imp name gets the peer's address, ahead of anything `IMP_DNS` would
-  say for it. Imp names are unique on a host, so two peers never tie. A bare name that is no peer is
+- A bare name that is a peer's imp name gets the peer's address, even when `IMP_DNS` has an answer
+  for it. Imp names are unique on a host, so two peers never tie. A bare name that is no peer is
   resolved as it would be without a network.
 - When the guest shares more than one network with a peer, a reverse lookup answers one name for
   each, sorted by network name.
@@ -88,5 +89,5 @@ them. `impz net ls` needs `read`; the other `impz net` commands need `manage`.
 
 ## How it works
 
-The [networking page](../architecture/network/egress.md#networks) covers the firewall rules and the
-resolver's part.
+For the firewall rules and the resolver's part, see the
+[networking page](../architecture/network/egress.md#networks).

@@ -24,24 +24,26 @@ and try two things at once.
 
 ## Install
 
-impz runs on one Linux machine with `/dev/kvm`: bare metal, or a VM with nested virtualization, with
-Docker. On a fresh Ubuntu or Debian server, `deploy/bootstrap.sh` from a release tag sets up the
-host and starts impd ([bootstrap a server](./docs/guides/install.md#bootstrap-a-server)), and
-[NixOS](./docs/guides/nixos.md) has a module. The host joins a
-[Tailscale](./docs/guides/tailscale.md) tailnet that you own, and other machines reach impd and the
-imps through it. Then install the CLI on your own machine:
+Each impz host is a Linux machine with `/dev/kvm`: bare metal, or a VM with nested virtualization.
+On a fresh Ubuntu or Debian server, run `deploy/bootstrap.sh` from a release tag. It installs the
+container engine, sets up the host and starts impd
+([bootstrap a server](./docs/guides/install.md#bootstrap-a-server)). On NixOS, use the
+[NixOS module](./docs/guides/nixos.md). The host joins a [Tailscale](./docs/guides/tailscale.md)
+tailnet that you own, and other machines reach impd and the imps through it. Then install the CLI on
+your own machine:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/zgeoff/impz/main/install.sh | sh   # install the CLI
-impz login https://imp.example.ts.net  # point it at your impd and its token
+impz login https://imp.example.ts.net  # point it at your impd; it asks for the token
 impz new box                           # create and boot an imp
 impz console box                       # a shell that outlives the terminal
 impz checkpoint box clean              # name a known-good state
 impz restore box clean                 # and back
 ```
 
-The [install guide](./docs/guides/install.md) also covers a dev instance from the repo and the
-release image.
+`impz login` asks for impd's token, which impd writes to `token` in its data folder on the host. For
+a dev instance from the repo or the release image, see the
+[install guide](./docs/guides/install.md).
 
 ## Features
 
@@ -71,9 +73,9 @@ release image.
 ## Configuration
 
 impd reads its settings from the environment: the RAM budget, the storage backend, the ports, the
-domain, backups and the rest. The [configuration guide](./docs/guides/configuration.md) lists every
-variable for impd, the host container, the dev instance and the CLI.
+domain, backups and the rest. Look up every variable for impd, the host container, the dev instance
+and the CLI in the [configuration guide](./docs/guides/configuration.md).
 
 ## Documentation
 
-[docs/](./docs/README.md) covers the architecture, the guides and development.
+Read [docs/](./docs/README.md) for the architecture, the guides and development.

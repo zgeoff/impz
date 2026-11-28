@@ -3,8 +3,8 @@
 `impz bench` times how long impd takes to create, wake and restore imps on your own hardware. It
 runs each step on 1 imp, then on 4, 16 and 64 at once, and reports the 50th, 95th and 99th
 percentile of each. It records the machine and its state with the numbers, because the same step
-takes a different time on another kernel, under nesting, or with a cold boot-template cache. Compare
-two runs on one machine to decide whether a change makes impd faster.
+takes a different time on another kernel, under nesting, or with a cold boot-template cache. To
+decide whether a change makes impd faster, [compare two builds](#compare-two-builds) on one machine.
 
 ## Run it
 
@@ -27,8 +27,8 @@ the whole report as JSON with `--json`.
 
 ## Scenarios
 
-Each scenario brings an imp to where its timed step starts, which the bench does not time, then
-times that step as the client sees it.
+Each scenario first brings an imp to where its timed step starts, without timing it, then times that
+step as the client sees it.
 
 | Scenario     | Before the timed step                              | The timed step                    |
 | ------------ | -------------------------------------------------- | --------------------------------- |
@@ -39,8 +39,8 @@ times that step as the client sees it.
 | `sleep`      | wakes or creates the imp                           | `impz sleep`                      |
 
 `--awake <duration>` keeps the imp awake that long before a scenario puts it to sleep. A
-`wake-young` run with no wait times the wake that
-[young guests](../architecture/lifecycle/sleep-and-wake.md#young-guests) describes.
+`wake-young` run with no wait times the wake of a young guest
+([young guests](../architecture/lifecycle/sleep-and-wake.md#young-guests)).
 
 `--asleep <duration>` keeps the imp asleep that long before `wake` or `wake-young` times its wake.
 Give it at least a second on 2 MiB pages: impd reads the memory file into the page cache after each
@@ -84,6 +84,8 @@ prints the report first.
 ## Compare two builds
 
 Numbers from two machines do not compare. To compare two builds of impd, run the bench against each
-on the same machine, in turn, more than once. CI does this for a branch:
+on the same machine, in turn, more than once each. The host facts and the host's state in each
+report show whether two runs came from the same machine in the same state. When you change the
+bench, keep them in the report. CI compares two builds for a branch:
 [the bench job](../runbooks/development.md#the-bench-job) runs a baseline and the branch on one
 runner and writes the table to its summary.

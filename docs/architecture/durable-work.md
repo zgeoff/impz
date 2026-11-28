@@ -1,25 +1,28 @@
 # Durable work
 
 Some work changes something outside the database, such as a VM, a disk or a file. When the process
-stops halfway, that work must finish or unwind after the restart. The durable work package gives a
-program an event log that numbers each change, operations that resume or undo their steps after a
-restart, and reconcilers that check the system on a timer and start operations. The package knows
-nothing of impd, the daemon that uses it, or of impd's records, such as an imp (a VM) or a
-checkpoint: the program that uses the package defines each kind of operation, event and reconciler,
-and owns the SQLite database.
+stops halfway, that work must finish or unwind after the restart. When nobody can tell what a step
+did, the work must stop and wait for a check. The durable work package gives a program an event log
+that numbers each change, operations that resume or undo their steps after a restart, and
+reconcilers that check the system on a timer and start operations. The package knows nothing of
+impd, the daemon that uses it, or of impd's records, such as an imp (a VM) or a checkpoint: the
+program that uses the package defines each kind of operation, event and reconciler, and owns the
+SQLite database.
 
-[The overview](./overview.md) places the package among the others, and gives the import rule that
-keeps it free of imp code.
+See [the overview](./overview.md) for where the package sits among the others, and for the import
+rule that keeps it free of imp code.
 
 ## One transaction for a change and its record
 
-The package never opens a transaction of its own. A function that makes several writes, such as a
-prune, takes only a transaction, so the type check fails a call on a plain connection. A function
-that makes one write, such as an event append, also accepts a plain connection, so the type check
-misses a call outside the transaction. The program must pass it the transaction of the change the
-event describes. The change and its event then commit together, or neither commits. A program that
-commits a change in one transaction and its event in another can lose the event in a crash, and a
-reader then never learns of the change.
+The package never opens a transaction of its own. The operation runner commits through the
+`withTransaction` function the program gives it, and every other write takes the program's
+transaction or connection as an argument. A function that makes several writes, such as a prune,
+takes only a transaction, so the type check fails a call on a plain connection. A function that
+makes one write, such as an event append, also accepts a plain connection, so the type check misses
+a call outside the transaction. The program must pass it the transaction of the change the event
+describes. The change and its event then commit together, or neither commits. A program that commits
+a change in one transaction and its event in another can lose the event in a crash, and a reader
+then never learns of the change.
 
 ## The event log
 
@@ -28,7 +31,7 @@ after the rows above it are removed. A reader keeps the sequence number of the l
 asks for the events after it. A reader that disconnects therefore misses nothing that is still in
 the table.
 
-The package runs no timer, so the program calls the event prune itself. The prune keeps the events
+The event log runs no timer, so the program calls the event prune itself. The prune keeps the events
 younger than `EVENT_MAX_AGE_MS`, but at most the newest `EVENT_MAX_ROWS`, and saves the highest
 sequence number it removed as the prune mark. When a reader asks for the events after a number below
 the mark, it gets a reset in place of events, because some events it has not seen are gone. The
@@ -56,8 +59,8 @@ those changes. Each time the program opens the file, it calls these, in order:
 
 1. `createOutsideWriteTriggers`, with the tables its events describe. It adds the
    `event_log_outside_writes` table and two kinds of trigger:
-   - database triggers that put a mark row in that table on each insert, update or delete in the
-     described tables;
+   - database triggers that, on each insert, update or delete in the described tables, put the
+     table's one mark row in place when it is not there yet;
    - a temporary trigger, on the program's own connection only, that runs before each insert of a
      mark row and skips that insert with `RAISE(IGNORE)`.
 2. `removeLogIDAfterOutsideWrites`, which clears the log ID when a mark row exists, and removes the
@@ -110,8 +113,8 @@ program, to find what the step did.
 
 A step may write an undo record before its effect, such as the name of the file it is about to
 create. The undo then finds what to remove even when the process stopped halfway through the step. A
-step that stopped halfway with no undo record gets no undo. A `fail` step whose undo must run after
-a restart therefore writes its record before its effect.
+step that stopped halfway with no undo record gets no undo. When a `fail` step's undo must run after
+a restart, write the step's undo record before its effect.
 
 The runner runs the undos in these cases:
 
@@ -144,12 +147,12 @@ prune, which removes an operation `OPERATION_KEEP_MS` after it ends. The key exp
 retry never meets a key whose operation is gone. No check keeps that order: keep `RETRY_KEY_KEEP_MS`
 the shorter when you change either.
 
-`waitForChange` waits for an operation to change. The runner calls `notify` on a change signal, from
-`createChangeSignal`, after each commit. The signal carries no data, so `waitForChange` reads the
-operation again and checks it. `waitForChange` subscribes to the next signal before it reads, so a
-commit that lands between its read and its wait still wakes it. The runner notifies the signal only
-on its own commits. A program that calls `waitForChange` to wait for its own rows must call `notify`
-after each commit that changes those rows.
+`waitForChange` takes a change signal, from `createChangeSignal`, a read and a check. It reads, and
+returns when the check passes; otherwise it waits for the next signal and reads again. The signal
+carries no data. `waitForChange` subscribes to the next signal before it reads, so a commit that
+lands between its read and its wait still wakes it. The runner calls `notify` on its signal after
+each commit of its own, so a wait on an operation needs nothing more. A program that waits on its
+own rows must call `notify` after each commit that changes them.
 
 ## Reconcilers
 
@@ -160,9 +163,9 @@ starts an operation, so the change gets steps, a record and an undo.
 
 The reconciler runner never runs two passes of one reconciler at the same time. Passes of different
 reconcilers run independently. When the program calls the runner's `trigger` for a reconciler, a
-pass runs now. A trigger that arrives during a pass runs one more pass after it, however many
-triggers arrive. A pass that throws counts as an error. After n errors in a row, the next pass waits
-up to the interval × 2ⁿ, and never more than 10 × the interval. The runner picks a random wait
+pass runs now, unless one is running. Triggers that arrive during a pass run one more pass after it,
+however many arrive. A pass that throws counts as an error. After n errors in a row, the next pass
+waits up to the interval × 2ⁿ, and never more than 10 × the interval. The runner picks a random wait
 between half and all of that limit, so reconcilers that fail together don't retry together.
 
 The runner keeps the last result of each reconciler in memory, and returns it from its `list`

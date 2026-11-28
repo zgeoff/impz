@@ -1,15 +1,18 @@
 # More than one host
 
+When you run impz on more than one host, log in to each host with `impz login`, then place new imps,
+list them all, or move one with the commands below.
+
 Each imp host runs its own impd, with its own imps, images, networks, tokens and secrets. The CLI
 saves each host (`impz login`, `impz host ls`, [configuration](./configuration.md#cli)) and calls
-one at a time: the current host, or the one `--host` names. Two commands reach every saved host:
-`impz new --place` creates an imp on the host with the most free RAM, and `impz ls --all` lists the
-imps on all of them. `impz move` takes an imp from one host to another over the tailnet: a stopped
-one cold, a sleeping one with its memory. [Moves](../architecture/storage/moves.md) covers the
-stream and the tickets.
+one at a time: the current host, or the one `--host` names. Two commands reach every saved host.
+`impz new --place` creates an imp on the host that scores the most free RAM, or on the next one when
+that host turns the boot away. `impz ls --all` lists the imps on all of them. `impz move` takes an
+imp from one host to another over the tailnet: a stopped one cold, a sleeping one with its memory.
+[Moves](../architecture/storage/moves.md) covers the stream and the tickets.
 
-Placement and the one view run in the CLI, never in impd. Each saved host has its own token, and no
-impd holds another's, so the API of each impd stays one host's. The dashboard shows one host.
+Placement and `impz ls --all` run in the CLI, never in impd. Each saved host has its own token, and
+no impd holds another's, so the API of each impd stays one host's. The dashboard shows one host.
 
 ## Placement
 
@@ -66,10 +69,10 @@ there. So a placement never leaves two imps. A failure after the create, in the 
 `--net` or the expose for `--public`, says `<imp> was created on <host>; <error>` and exits 1. With
 `--json` the CLI still writes `{ "host", "imp", "error" }`.
 
-A name that a saved host has already ends placement before any create, so the name stays unique
-across your hosts and `impz ls --all` stays clear. This check is best effort: a host that does not
-answer, or a token whose imp patterns hide the imp, can still hold the name. impd checks the name
-only on its own host.
+When a saved host already has the name, placement stops before any create, so it adds no second imp
+by a name it can see, and `impz ls --all` stays clear. This check is best effort: a host that does
+not answer, or a token whose imp patterns hide the imp, can still hold the name. impd checks the
+name only on its own host.
 
 The ranking is a snapshot. Two `--place` calls at the same moment can pick the same host; its
 governor still holds the budget, and the second create moves on to the next host if it must.
@@ -152,18 +155,18 @@ holds no lock on storage for its length: other imps, backups and `impz gc` go on
 
 ### What a move keeps
 
-| Kept                                                           | Not kept                                                     |
-| -------------------------------------------------------------- | ------------------------------------------------------------ |
-| The ID and the name                                            | The slot, the guest address and the ports: the target picks  |
-| vCPUs, memory, disk size, HTTP port, CPU limit, weight         | The memory: the imp arrives `stopped` and boots cold         |
-| A warm move: the memory and the slot                           | A warm move: the source's broker CA (see below)              |
-| The disk, with everything in it (services too)                 | Open connections and sessions: they end                      |
-| Each checkpoint, its label and time (with a new ID)            | Secret values: they never leave a host                       |
-| The egress policy                                              | Grants of a secret the target has no secret by that name for |
-| Grants, for each secret the target has by the same name        | The audit logs and the event history                         |
-| A template copy's owed identity reset                          | Public exposure: a public imp does not move                  |
-| The last 4 cold boots, so a client knows what ended its output | Leases from `leases.*`, with `--stop` (see below)            |
-| Live leases and holds, each with the time it had left          |                                                              |
+| Kept                                                           | Not kept                                                                    |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| The ID and the name                                            | The slot, the guest address and the ports, in a cold move: the target picks |
+| vCPUs, memory, disk size, HTTP port, CPU limit, weight         | The memory, in a cold move: the imp arrives `stopped` and boots cold        |
+| A warm move: the memory and the slot                           | A warm move: the source's broker CA (see below)                             |
+| The disk, with everything in it (services too)                 | Open connections and sessions: they end                                     |
+| Each checkpoint, its label and time (with a new ID)            | Secret values: they never leave a host                                      |
+| The egress policy                                              | Grants of a secret the target has no secret by that name for                |
+| Grants, for each secret the target has by the same name        | The audit logs and the event history                                        |
+| A template copy's owed identity reset                          | Public exposure: a public imp does not move                                 |
+| The last 4 cold boots, so a client knows what ended its output | Leases from `leases.*`, with `--stop` (see below)                           |
+| Live leases and holds, each with the time it had left          |                                                                             |
 
 The image goes by digest, as files. A target with the digest uses its own; one without it gets the
 image in the stream and files it under a digest of what arrived, never the source's claim: the
@@ -176,12 +179,12 @@ image by that name with another digest, the moved image's name gets a `-<8 hex>`
 
 ### Leases
 
-A move carries the imp's live [leases](./leases.md) and holds. Each one ends on the target as long
-after the target reads the stream's header as it had left when the source built it, so the two
-hosts' clocks need not agree. One that ends while the disk streams is left out. The target writes
-the leases after the disk arrives, and shows them on the `receiving` imp from then on. Its idle loop
-and governor respect them once it commits, and the commit emits `ImpChanged` with reason `held` for
-an imp with a live lease.
+A move carries the imp's live [leases](./leases.md) and holds. On the target, each one keeps the
+time it had left when the source built the stream, counted from when the target reads the stream's
+header, so the two hosts' clocks need not agree. One that ends while the disk streams is left out.
+The target writes the leases after the disk arrives, and shows them on the `receiving` imp from then
+on. Its idle loop and governor respect them once it commits, and the commit emits `ImpChanged` with
+reason `held` for an imp with a live lease.
 
 - `impz move --stop` of a running or sleeping imp ends its leases from `leases.*`, as `impz stop`
   does: it passes `force`. Without `force`, `moves.prepare` with `stop` fails with `LEASED` before
@@ -259,9 +262,10 @@ it travels in the `Authorization` header, never the URL. Its lifetime:
 
 ### When a move fails
 
-Before the receipt, nothing changed: the target removes what it wrote, and once it confirms, the
-source takes its mark off. `impz move` says so; run it again. A target that does not confirm (it is
-down, or the network is) leaves the mark on, with the error in `moves.status`: run
+Before the receipt, the imp stays on the source, though a `--stop` move may have stopped it
+([leases](#leases)). The target removes what it wrote, and once it confirms, the source takes its
+mark off. `impz move` says so; run it again. A target that does not confirm (it is down, or the
+network is) leaves the mark on, with the error in `moves.status`: run
 `impz move <name> <host> --abort` once it is back.
 
 The send runs in the source impd, not in the CLI. An `impz move` stopped with Ctrl-C leaves it to
@@ -282,9 +286,9 @@ A verified copy waits on the target until the source commits or aborts it.
 
 ### Limits
 
-- The tailnet only. The source refuses a peer URL that is not a literal tailnet address, and the
-  target refuses a peer that the connected socket does not show on the tailnet. The tailnet ACL must
-  let `tag:imp` reach `tag:imp` on the API port ([ACL](#the-acl)).
+- Moves run over the tailnet only. The source refuses a peer URL that is not a literal tailnet
+  address, and the target refuses a peer that the connected socket does not show on the tailnet. The
+  tailnet ACL must let `tag:imp` reach `tag:imp` on the API port ([ACL](#the-acl)).
 - The imp must be stopped, or sleeping on a host the target matches ([warm moves](#warm-moves)). A
   running imp moves with `--stop`, cold; `impz sleep` first keeps its memory.
 - The imp must be tailnet-only. The credential and DNS record of a

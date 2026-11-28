@@ -3,8 +3,8 @@
 A coding agent in an imp needs API tokens, and a token the guest holds can be read and sent anywhere
 by whatever runs there. The broker keeps the tokens on the host instead. The owner grants a secret
 to an imp, and the broker adds it to the imp's requests to that secret's hosts, so the guest, its
-disk, its snapshots, its checkpoints and its forks hold only a placeholder. The
-[connectors guide](../../guides/connectors.md) covers secrets, grants and their kinds.
+disk, its snapshots, its checkpoints and its forks hold only a placeholder. For secrets, grants and
+their kinds, see the [connectors guide](../../guides/connectors.md).
 
 ## The path of a request
 
@@ -25,25 +25,26 @@ the imp has a grant for goes into a TLS terminator for that imp and host, a Bun 
 socket in the data directory, with a leaf certificate from the broker's own CA. The guest trusts
 that CA, because impd writes it into the guest's trust bundle. The terminator reads the grant, the
 rule and the value for each request as it arrives, not when the connection opens, so a revoke takes
-effect on the next request, and an audit row records each request it sent with a credential. A grant
-may carry a method and path filter, read with the grant, and the terminator refuses a request
-outside it before the credential goes into any header
+effect on the next request. The terminator writes an audit row for each request it sent with a
+credential. A grant may carry a method and path filter, read with the grant, and the terminator
+refuses a request outside it before the credential goes into any header
 ([narrow a grant](../../guides/connectors.md#narrow-a-grant)). The front port and the terminator
 also record each request they refuse, with the imp, the reason and the host when the request names
 one. Both refuse before they add any credential, so a refused row never holds one.
 
 A WebSocket upgrade takes the same checks as a request. The terminator then opens its own WebSocket
 to the service with the credential, and relays each message between the guest's connection and its
-own. The terminator tracks each open WebSocket by imp and host, and the pass that stops a terminator
-no grant covers closes them as well, so a revoke ends an open WebSocket as it ends the next request.
+own. The terminator tracks each open WebSocket by imp and host, and the ticker that stops a
+terminator no grant covers closes them as well, so a revoke ends an open WebSocket as it ends the
+next request.
 
 Any other host gets a plain tunnel. A tunnel starts inside the host container, past the firewall
-that holds the guests in, so the broker refuses it every private, shared, loopback and link-local
-range, the imp range, the blocked IPv6 ranges, and the container's own addresses, and holds a tunnel
-to the imp's egress policy ([egress](./egress.md)). The broker reads these ranges from the reach
-policy that builds the egress firewall's, so a range the firewall refuses an imp is refused to its
-tunnels as well. A host a grant covers stays reachable under every policy, because the terminator
-dials it from the host container.
+that holds the guests in, so the broker refuses a tunnel to every private, shared, loopback and
+link-local range, the imp range, the blocked IPv6 ranges, and the container's own addresses, and
+holds a tunnel to the imp's egress policy ([egress](./egress.md)). The broker reads these ranges
+from the reach policy that builds the egress firewall's, so a range the firewall refuses an imp is
+refused to its tunnels as well. A host a grant covers stays reachable under every policy, because
+the terminator dials it from the host container.
 
 ## Secrets
 
@@ -63,14 +64,15 @@ their filters, as far as the forking caller could make them itself
 
 ## Naming the imp
 
-A secret can ask the broker to name the imp to the service. The terminator then adds a token that
-impd signs, and it removes the guest's own `Imp-Identity` header on every request, so the guest
-cannot claim another imp's identity ([imp identity](./identity.md)).
+When a secret is set to name the imp to the service, the terminator adds a token that impd signs,
+and it removes the guest's own `Imp-Identity` header on every request, so the guest cannot claim
+another imp's identity ([imp identity](./identity.md)).
 
 ## Who gets the proxy
 
 An exec in an imp with a grant gets the proxy and CA variables once impd has written the CA bundle
-into this boot of the guest, and an exec can require that before it starts, which fails rather than
-run without the broker. Services started from the image's service files get none of it. A tool that
-ignores `HTTPS_PROXY`, or keeps a trust store of its own, goes around the broker and gets no
-credential. A ticker stops terminators that no grant covers and renews their leaf certificates.
+into this boot of the guest. An exec can require the bundle before it starts, and then fails rather
+than run without the broker. Services started from the image's service files get none of it. A tool
+that ignores `HTTPS_PROXY`, or keeps a trust store of its own, goes around the broker and gets no
+credential. A ticker stops each terminator that no grant covers, and renews the leaf certificates of
+the rest.

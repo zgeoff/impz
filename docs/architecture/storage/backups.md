@@ -1,9 +1,9 @@
 # Backups
 
-impd backs up each imp's disk, its checkpoints and the images they come from to a
-[restic](https://restic.net) repository off the host: an S3 bucket, a REST server, or anything else
-restic speaks. Backups are off until the owner names a repository, and the
-[backups guide](../../guides/backups.md) covers running, restoring and protecting them.
+impd backs up each imp's disk, its checkpoints and the images they come from, except for the
+[imps left out](#imps-left-out), to a [restic](https://restic.net) repository off the host: an S3
+bucket, a REST server, or anything else restic speaks. Backups are off until the owner names a
+repository. To run, restore or protect backups, see the [backups guide](../../guides/backups.md).
 
 restic does the work that a store of impd's own would need: encryption, content-defined
 deduplication, many targets, locks, retention, garbage collection and verification. It also gives
@@ -13,9 +13,10 @@ the repository password stays in its file, never in an argv, a log or the API.
 
 ## What a backup holds
 
-Each run is one restic snapshot of a backup tree in the data directory: a manifest, each imp's disk
-and checkpoints, and each image. The paths are the same every run, so restic finds each file it read
-the run before and uploads only the chunks that changed.
+Each run is one restic snapshot of a backup tree in the data directory: a manifest, the disk and
+checkpoints of each imp the run copies ([a run](#a-run)), and each image. The paths are the same
+every run, so restic finds each file it read the run before and uploads only the chunks that
+changed.
 
 The manifest is everything a restore reads: each imp's settings, its egress policy, the names of the
 secrets granted to it with each grant's filter, the networks it is on, its checkpoints in order, and
@@ -43,15 +44,16 @@ secret's row as it was, with its generation and the name of its value file, and 
 it was, with its id, hash and keys, so each token's own secret works again. A token deleted after
 the backup point comes back too, because the copy is the database as it was at that point.
 
-A secret or a token whose name the host has keeps the host's own, and a key that is bound here or
-listed in `authorized_keys` is left out. A secret whose value file is not a name impd gives is left
-out too, because the broker reads and removes a value file by its name in the secrets directory, and
-an altered copy must not point it anywhere else. The grants in the manifest then find the secrets by
-name. A token's grantable list names each secret with its generation, which the restored row keeps,
-and a replace of the value with the same rules keeps it too, so the token grants again once the
-secret has a value. OAuth clients and the grants people approved through them are not restored, so
-each client signs in again. A restore of one imp reads no copy. The tokens and secrets stay when the
-imps' restore fails after them, and a second restore of every imp skips them by name.
+When the host already has a secret or a token of the same name, impd keeps the host's, and it leaves
+out each key that is bound here or listed in `authorized_keys`. impd also leaves out a secret whose
+value file has a name impd did not give, because the broker reads and removes a value file by its
+name in the secrets directory, and an altered copy must not point it anywhere else. impd then
+matches the grants in the manifest to the secrets by name. A token's grantable list names each
+secret with its generation, which the restored row keeps, and a replace of the value with the same
+rules keeps it too, so the token grants again once the secret has a value. OAuth clients and the
+grants people approved through them are not restored, so each client signs in again. A restore of
+one imp reads no copy. When the restore of the imps fails after the tokens and secrets are back, the
+tokens and secrets stay, and a second restore of every imp skips them by name.
 
 ## Imps left out
 
@@ -63,9 +65,9 @@ snapshot carries an `excluded=<name>` tag, so a restore of the name finds that p
 with the reason instead of a bare not-found. A whole-host restore reports each such imp as not
 restorable.
 
-The copies an imp's disk can make keep the setting. A fork is created with backup off too, and a
-move carries the setting, so a target too old to keep it refuses the move before any byte goes. A
-template of such an imp is refused, because every run backs up every image.
+Each copy of such an imp's disk keeps the setting. A fork is created with backup off too, and a move
+carries the setting, so a target too old to keep it refuses the move before any byte goes. impd
+refuses to make a template of such an imp, because every run backs up every image.
 
 ## A run
 
@@ -93,8 +95,8 @@ own schedules, and a failed check marks the repository as possibly damaged until
 
 A crash mid-run leaves no restic snapshot, since restic commits a snapshot only at its end. ZFS
 clones and snapshots from the run go at the next start, and the next run's unlock drops the run's
-stale lock. A host's restic locks are recognised as its own by a fixed host name, so a restarted
-container can drop the locks its crashed restic left; a live lock is never removed.
+stale lock. impd recognises its own restic locks by a fixed host name, so a restarted container can
+drop the locks its crashed restic left; impd never removes a live lock.
 
 ## Restore
 

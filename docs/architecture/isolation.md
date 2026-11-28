@@ -3,8 +3,9 @@
 An imp runs agent code that a prompt injection can take over, so each layer around it says plainly
 what it holds back and what it does not. The VM is the boundary between one imp and the rest. The
 jailer and the cgroups keep a guest that escapes its VM to its own files and its own resources. The
-host container and the inner container stop accidents, not escapes. [The host](./host.md) covers the
-container's privileges, and [egress](./network/egress.md) what an imp may reach on the network.
+host container and the inner container stop accidents, not escapes. For the container's privileges,
+see [the host](./host.md); for what an imp may reach on the network, see
+[egress](./network/egress.md).
 
 ## The VM
 
@@ -38,9 +39,9 @@ Before each boot or wake, impd prepares the jail as if the last VM had been host
    the jail again from nothing, since the last VM owned it and may have left symlinks in it.
 3. It binds the imp's files in, without setuid or device nodes anywhere below, and the kernel and
    the system drive read-only, with mount events between the jail and the imp's real directory cut
-   off both ways. A wake binds no kernel, and the drive it binds is the one its snapshot names,
-   which after an agent upgrade is older than the one a boot gets. Every directory stays root's, so
-   the VM can write into its own files but never swap one for a symlink.
+   off both ways. A wake binds no kernel, and the drive it binds is the one recorded in its
+   snapshot, which after an agent upgrade is older than the one a boot gets. Every directory stays
+   root's, so the VM can write into its own files but never swap one for a symlink.
 
 The VM owns its run directory while Firecracker binds its sockets and loads its snapshot. impd then
 seals the directory, giving it back to root, before the guest runs a single instruction, and checks
@@ -51,22 +52,22 @@ is written into empty files impd makes for it, and handed back to root only once
 process of its uid are gone. impd opens every file of its own beside a VM without following
 symlinks, and checks that each socket is a socket before it connects.
 
-A jailed VM starts only inside its own cgroup, because killing the cgroup is what stops every
-process of it at once, faster than a fork chain can outrun a scan. On a host with no cgroup
-delegation, the owner turns the jailer off: VMs then run as root, unjailed and without limits. impd
-adopts, stops and cleans up VMs of either kind, and a snapshot from either wakes under the other, so
-the setting can change across a restart.
+A jailed VM starts only inside its own cgroup, because killing the cgroup stops every process in it
+at once, and a fork chain can outrun a scan. On a host with no cgroup delegation, the owner turns
+the jailer off: VMs then run as root, unjailed and without limits. impd adopts, stops and cleans up
+VMs of either kind, and a snapshot from either wakes under the other, so the setting can change
+across a restart.
 
 ## Cgroups
 
 The container's entrypoint takes a private cgroup v2 namespace and makes a subtree for the imps with
-the CPU and memory controllers. impd makes one cgroup per VM and starts Firecracker inside it, so no
-VM thread ever runs outside its limits. It sets the CPU limit and weight the owner chose, and a hard
-memory limit of the guest's memory plus room for Firecracker and the page cache of its disk and
-snapshot I/O, with no swap, and an OOM kill that takes the whole VM. The lifecycle then names a VM
-that the limit killed as such, rather than as a crash. The soft memory limit stays off, because its
-throttling slowed a guest's disk I/O badly. In a container without its own cgroup namespace, impd
-stores CPU settings without enforcing them, and no jailed VM starts.
+the CPU and memory controllers. With the jailer on, impd makes one cgroup per VM and starts
+Firecracker inside it, so no VM thread ever runs outside its limits. It sets the CPU limit and
+weight the owner chose, and a hard memory limit of the guest's memory plus room for Firecracker and
+the page cache of its disk and snapshot I/O, with no swap, and an OOM kill that takes the whole VM.
+The lifecycle then records the VM as killed by its memory limit. The soft memory limit stays off,
+because its throttling slowed a guest's disk I/O badly. In a container without its own cgroup
+namespace, impd stores CPU settings without enforcing them, and no jailed VM starts.
 
 ## The host container
 
@@ -83,5 +84,5 @@ No two imps share a layer-2 network, and a guest cannot send with another imp's 
 reaches another only through a private network the owner made
 ([egress](./network/egress.md#networks)). KSM, when the owner turns it on, is a side channel across
 every imp on the host ([the RAM governor](./lifecycle/ram-governor.md#ksm)). One owner per host is
-the model: the jailer and the VM hold a hostile guest in, but none of it makes a host safe for
-several owners.
+the model: the jailer and the VM hold a hostile guest in, but none of these layers makes a host safe
+for several owners.

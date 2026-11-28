@@ -1,10 +1,14 @@
 # HTTPS on your own domain
 
+To put an imp host's imps on a domain you own, follow [Set it up](#set-it-up), then
+[Public imps](#public-imps) to put an imp on the internet. Each "How it works" section explains the
+part above it, for when it fails or you change it.
+
 With `IMP_DOMAIN=imp.example.com`, every imp is at `https://<name>.imp.example.com`, and impd's own
 API is at `https://imp.example.com`. Both answer on the tailnet only, except the imps you make
 [public](#public-imps). impd gets one wildcard certificate from Let's Encrypt with the ACME DNS-01
 challenge, renews it, and keeps the DNS records pointed at the host's tailnet IP. Without
-`IMP_DOMAIN`, nothing changes: the
+`IMP_DOMAIN`, impd serves no HTTPS, and the
 [per-port URLs](../architecture/network/ingress.md#the-wake-proxy) stay the only tailnet URLs.
 
 This is the recommended way to give imps names. Tailscale Services can give each imp a name instead
@@ -35,7 +39,7 @@ You need a domain in a Cloudflare zone and an API token for it.
    ```
 
 4. From a tailnet member, `impz url <name>` prints the https URL. With HTTPS on, it comes first,
-   before the local and tailnet URLs; a script that wants one of those picks it by its form.
+   before the local and tailnet URLs; in a script, pick the URL you want by its form.
    `impz login https://imp.example.com` reaches the API, and `https://imp.example.com` opens the
    [dashboard](./dashboard.md). Over HTTPS its session cookie is `__Host-imp_session`, which no imp
    under the domain can set ([daemon](../architecture/control/auth.md#the-dashboard-session)).
@@ -49,9 +53,10 @@ not pass it on a command line.
 
 ### The token in a file
 
-`IMP_DNS_API_TOKEN_FILE` names a file that holds the token, in place of `IMP_DNS_API_TOKEN`. A
-secrets manager or other infrastructure as code can then own the token and drop it in place, and the
-env file holds no secret. Set one of the two, not both: both is a start error.
+Set `IMP_DNS_API_TOKEN_FILE` to the path of a file that holds the token, in place of
+`IMP_DNS_API_TOKEN`. A secrets manager or other infrastructure as code can then own the token and
+drop it in place, and the env file holds no secret. Set one of the two: impd refuses to start with
+both.
 
 ```sh
 IMP_DNS_API_TOKEN_FILE=/etc/imp/dns-api-token
@@ -61,25 +66,25 @@ The container sees `/etc/imp` read-only, so a file there (root, mode 0400) needs
 NixOS, set `services.imp.dnsApiTokenFile` instead ([NixOS](./nixos.md#the-dns-api-token)).
 
 - The file holds the token alone, in ASCII. impd trims leading and trailing whitespace, and refuses
-  a token with any character outside letters, digits and `._~+/-`: a pasted `IMP_DNS_API_TOKEN=...`
-  line, two tokens, or a UTF-16 file.
+  a token with any character outside letters, digits and `._~+/-`, such as a pasted
+  `IMP_DNS_API_TOKEN=...` line, two tokens, or a UTF-16 file.
 - impd reads the file at each Cloudflare API call: each certificate attempt, each pass over the
   records. A new token works at the next call, without a restart.
-- A file that is missing, empty or refused does not stop impd. impd starts, logs the path and what
-  is wrong (never the file's contents), and each DNS call reads the file again. Certificate attempts
-  back off as for any DNS failure (below), the certificate on disk keeps serving, and the records
-  stay as they are. `impz info` (and `system.info` in the API) reads the file again each time you
-  ask, and shows an error on its `https` line (`DNS token file readable` once it reads; with
-  `IMP_DNS_API_TOKEN` there is no file to check, and the line shows the domain alone):
+- When the file is missing, empty or refused, impd still starts. It logs the path and what is wrong
+  (never the file's contents), and reads the file again at each DNS call. Certificate attempts back
+  off as for any DNS failure (below), the certificate on disk keeps serving, and the records stay as
+  they are. To check the file, run `impz info` (or call `system.info` in the API), which reads it
+  again each time. With `IMP_DNS_API_TOKEN` in place of a file, its `https` line shows the domain
+  alone. With a file, the line shows `DNS token file readable` once impd reads it, or the error:
 
   ```text
   https       imp.example.com, ERROR: the DNS API token file /etc/imp/dns-api-token is empty
   ```
 
 - While impd has no certificate, nothing listens on the HTTPS port, the HTTP port or the public
-  ports: no imp is ever served as plain HTTP in its place. Once a certificate exists, the HTTP port
-  only redirects to HTTPS. impd's API on its own port stays up throughout, so you can see the state
-  and fix the file without a restart.
+  ports, so no imp is ever served as plain HTTP in its place. Once a certificate exists, the HTTP
+  port only redirects to HTTPS. impd's API on its own port stays up throughout, so you can see the
+  state and fix the file without a restart.
 - Without `IMP_DOMAIN`, the file is unused, and impd logs a warning at start.
 
 ## How it works
@@ -88,18 +93,18 @@ NixOS, set `services.imp.dnsApiTokenFile` instead ([NixOS](./nixos.md#the-dns-ap
 
 One certificate covers `imp.example.com` and `*.imp.example.com`. A wildcard needs DNS-01, so impd
 writes the challenge values as TXT records on `_acme-challenge.imp.example.com` through the DNS
-provider. Both names put a value on that one record name, so impd adds both values side by side,
-waits until every one of the zone's nameservers answers both, and only then tells the CA to look. It
-removes both records after each attempt, success or not.
+provider. The challenge for each name goes on that one record name, so impd adds both values side by
+side, waits until every one of the zone's nameservers answers both, and only then tells the CA to
+look. It removes both records after each attempt, success or not.
 
 impd uses [acme-client](https://github.com/publishlab/node-acme-client) in-process. There is no
 sidecar and no extra binary in the image.
 
 ### Renewal and failures
 
-- A check runs at start and every 10 minutes. impd asks for a new certificate when there is none,
-  when the one on disk does not cover both names, or when two thirds of its lifetime has passed (day
-  60 of 90).
+- impd checks the certificate at start and every 10 minutes. It asks for a new one when there is
+  none, when the one on disk does not cover both names, or when two thirds of its lifetime has
+  passed (day 60 of 90).
 - impd never waits for the CA at start. The listeners start when a certificate exists, from disk or
   freshly issued.
 - An expired certificate on disk still serves, with a log line, while renewal keeps failing. Clients
@@ -125,10 +130,9 @@ start it again.
 ### Listeners
 
 impd listens on `IMP_HTTPS_PORT` (443) and `IMP_HTTP_PORT` (80), each on two addresses: the tailnet
-IP and 127.0.0.1. It never listens on 0.0.0.0, so a port that the container engine publishes to the
-internet never reaches these listeners. impd checks the tailnet IP every 30 seconds and moves the
-listeners when it changes. A failed check keeps them where they are, so it never cuts open
-connections.
+IP and 127.0.0.1. They never bind 0.0.0.0, so a port that the container engine publishes to the
+internet never reaches them. impd checks the tailnet IP every 30 seconds and moves the listeners
+when it changes. When a check fails, impd leaves them where they are and cuts no open connection.
 
 - **443** terminates TLS and hands the request to the
   [wake proxy](../architecture/network/ingress.md#the-wake-proxy). The Host header must be exactly
@@ -138,10 +142,10 @@ connections.
   goes to the API on the bare domain, and never to an imp.
 - **80** answers `308` with the same path on `https://`, for hosts under the domain only. It never
   wakes an imp.
-- One wildcard certificate covers every name, so SNI needs no choice.
-- A new certificate starts a second listener next to the old one (`SO_REUSEPORT`); the old one stops
-  taking connections and lets its open ones finish. Bun cannot change the certificate of a running
-  server. Open WebSockets survive a renewal.
+- One wildcard certificate covers every name, so impd picks no certificate by SNI.
+- On a new certificate, impd starts a second listener next to the old one (`SO_REUSEPORT`); the old
+  one stops taking connections and lets its open ones finish. Bun cannot change the certificate of a
+  running server. Open WebSockets survive a renewal.
 
 ### DNS records
 
@@ -150,10 +154,10 @@ DNS-only (`proxied: false`). It sets them at start and again whenever the tailne
 does change: Tailscale deletes an ephemeral node that stays offline, and the next start registers a
 new node with a new IP ([state and ephemeral keys](./tailscale.md#state-and-ephemeral-keys)).
 
-impd marks each record it writes with the comment `managed by impd`, and changes only those. A name
-that already has an A, AAAA or CNAME record without that comment stops impd with an error that names
-the record. impd never replaces a record it did not make. If it finds more than one record of its
-own on a name, it logs a warning and updates only the first.
+impd marks each record it writes with the comment `managed by impd`, and changes only those. When a
+name already has an A, AAAA or CNAME record without that comment, impd stops with an error that
+names the record. impd never replaces a record it did not make. If it finds more than one record of
+its own on a name, it logs a warning and updates only the first.
 
 **CAUTION:** Give impd a name of its own, such as `imp.example.com`. Do not use a zone apex such as
 `example.com` that already serves a website. impd refuses to replace the website's record, so HTTPS
@@ -173,12 +177,12 @@ impz unexpose web                # tailnet-only again, at once
 ```
 
 impd makes the token or the password and prints it once. It keeps only a sha256 hash, so a lost
-credential cannot be shown again. Running `impz expose` again on a public imp makes a new
-credential, and the old one stops working at once; that is also how you change the auth. Rotating a
-credential is an expose, so it needs a token with `manage` on the whole host too. A request without
-the right credential gets a `401` before the imp wakes, so a stranger never boots it. The credential
-goes no further than impd: the imp never sees the `Authorization` header, which also means an app
-behind auth cannot use that header for itself. Use `--auth none` for an app that does its own auth.
+credential cannot be shown again. To change the credential or the auth, run `impz expose` again:
+impd makes a new credential, and the old one stops working at once. Rotating a credential is an
+expose, so it needs a token with `manage` on the whole host too. A request without the right
+credential gets a `401` before the imp wakes, so a stranger never boots it. The imp never sees the
+`Authorization` header, so an app behind auth cannot use that header for itself. Use `--auth none`
+for an app that does its own auth.
 
 `impz expose`, `impz unexpose` and `impz new --public` need a token with `manage` scope on the whole
 host: a token limited to some imps cannot change which of them are on the internet.
@@ -198,7 +202,7 @@ restore are tailnet-only until you expose them.
    ```
 
    impd logs a warning at start when it is a private, tailnet (`100.64.0.0/10`), loopback or
-   link-local address: the records would point where the internet cannot reach.
+   link-local address, because the records would then point where the internet cannot reach.
 
 2. Publish the public listeners as the host's ports 443 and 80. With the systemd unit, set
    `IMP_PUBLIC_PORTS=-p 443:7443 -p 80:7480` in the same env file.
@@ -211,9 +215,9 @@ auth, and the name is in DNS. Expose only what you would put on the internet you
 
 - **Listeners.** impd runs a second pair of listeners, TLS on `IMP_PUBLIC_HTTPS_PORT` (7443) and a
   redirect on `IMP_PUBLIC_HTTP_PORT` (7480), on every address in the host container. Podman
-  publishes them as 443 and 80. The listener a request comes in on decides what it may reach, never
-  the client's address: a container engine's port publishing can make a public client look like the
-  bridge.
+  publishes them as 443 and 80. impd decides what a request may reach by the listener it comes in
+  on, never by the client's address: a container engine's port publishing can make a public client
+  look like the bridge.
 - **Routing.** The public listeners serve public imps only. A tailnet-only imp, a name that is no
   imp, and the bare domain all get the same `404`, whatever the Host header says, so the internet
   cannot tell which names exist. The redirect on 80 answers only for public imps too.
@@ -221,15 +225,15 @@ auth, and the name is in DNS. Expose only what you would put on the internet you
   burst and then one every 6 seconds, and 20 wrong credentials in a burst and then one every 3
   seconds. Over a limit, the answer is `429` with `Retry-After`. A request with no credential always
   gets the `401` challenge and counts against nothing, so a stranger cannot block a browser's
-  password prompt; the right credential always passes too, so guessing cannot lock the owner out.
-  The redirect on port 80 only checks that the name is a public imp: it takes no slot and no wake.
-  The limits count per imp, not per client: behind a container engine's port publishing every client
-  can share one source address.
+  password prompt. The right credential never counts against the wrong-credential limit, so guessing
+  cannot lock the owner out. The redirect on port 80 only checks that the name is a public imp: it
+  takes no slot and no wake. The limits count per imp, not per client: behind a container engine's
+  port publishing every client can share one source address.
 - **Privacy.** A `502` or `503` on the public listener says only that the site did not answer or is
-  not available, never why. The client's own `Forwarded`, `X-Real-IP` and `X-Forwarded-For` are
-  dropped, and `X-Forwarded-For` holds only the address of the socket, or is left out when impd
-  cannot read it. `X-Forwarded-Host` and `X-Forwarded-Proto` are impd's own: the Host it routed by,
-  and `https`.
+  not available, never why. impd drops the client's own `Forwarded`, `X-Real-IP` and
+  `X-Forwarded-For`, and sets `X-Forwarded-For` to the address of the socket alone, or leaves it out
+  when it cannot read that address. `X-Forwarded-Host` and `X-Forwarded-Proto` are impd's own: the
+  Host it routed by, and `https`.
 - **HTTP/1.1 only.** The listeners do not offer HTTP/2: `curl --http2` gets HTTP/1.1, because the
   server agrees on no ALPN protocol.
 - **Records.** Each public imp gets its own A record, `<name>.imp.example.com`, at `IMP_PUBLIC_IP`,
@@ -239,8 +243,8 @@ auth, and the name is in DNS. Expose only what you would put on the internet you
   or a destroy, and checks every record with that comment one label under the domain at start and
   every 10 minutes. It removes the ones that are not public, and all of them when `IMP_PUBLIC_IP` is
   unset but `IMP_DOMAIN` is still set, so turning public mode off takes the records down too. It
-  never touches a record with another comment: not the bare domain or the wildcard
-  (`managed by impd`), not a record you made, and not the records of another impd on a name such as
+  never touches a record with another comment, so it leaves alone the bare domain and the wildcard
+  (`managed by impd`), any record you made, and the records of another impd on a name such as
   `dev.imp.example.com`, whose comment names its own domain. A domain too long for Cloudflare's
   100-character comment gets a hash of the domain in place of its name.
 - **Certificate.** The wildcard certificate covers every public name, so a public imp needs no
@@ -251,7 +255,7 @@ auth, and the name is in DNS. Expose only what you would put on the internet you
 - The tailnet listeners still serve a public imp without its credential, to a client that reaches
   the tailnet IP directly (with `--resolve`, say): tailnet members are trusted, as they are for
   every other imp.
-- Out of scope: IPv6 (no AAAA records), and detecting the public IP, which you set by hand.
+- Public mode leaves out IPv6 (no AAAA records) and detecting the public IP, which you set by hand.
 
 ## Why the records point at the tailnet IP
 
@@ -266,7 +270,7 @@ inside your tailnet, so:
   tell tailnet clients from public ones, and a client's source address is not reliable behind a
   container engine's port publishing.
 
-What the public learns: the domain exists, and it points at a CGNAT address. Certificate
+The public learns only that the domain exists and points at a CGNAT address. Certificate
 Transparency logs show `*.imp.example.com`, but not the imp names.
 
 **NOTE:** Some resolvers with DNS rebinding protection drop answers in private or CGNAT ranges,
@@ -298,18 +302,18 @@ IMP_DEV_NAME=imp-dev-https IMP_DEV_PORT_OFFSET=4500 scripts/test-e2e.sh --only h
 
 The harness starts both containers on a Docker network of their own. The suite then reboots the dev
 instance onto that network with `IMP_DOMAIN=imp.test`, `IMP_DNS_PROVIDER=challtestsrv`, the Pebble
-directory, and Pebble's TLS root in `IMP_ACME_CA_FILE`, and reboots it with HTTPS off when it ends,
-so the suites after it run against a plain impd. The suite waits for the certificate, checks both
-names on it, fetches an imp over https from inside the host container, sleeps it and wakes it by
-https, and checks the 404 and the redirect. It wakes the imp by https and by plain HTTP under the
-same conditions, and records both times as the client sees them.
+directory, and Pebble's TLS root in `IMP_ACME_CA_FILE`. When the suite ends, it reboots the instance
+with HTTPS off, so the suites after it run against a plain impd. The suite waits for the
+certificate, checks both names on it, fetches an imp over https from inside the host container,
+sleeps it and wakes it by https, and checks the 404 and the redirect. It wakes the imp by https and
+by plain HTTP under the same conditions, and records both times as the client sees them.
 
 `IMP_DNS_PROVIDER=challtestsrv` exists for this test only. challtestsrv cannot list records, so its
 provider remembers the A records this impd wrote, with their comments, and lists those. A restarted
 impd forgets them; a public record it wrote before the restart stays in challtestsrv until the
-harness removes challtestsrv at the end of the run. It writes records through challtestsrv's
-management API at `IMP_DNS_API_URL`. impd refuses it unless `IMP_E2E=1`, which only the harness
-sets.
+harness removes challtestsrv at the end of the run. The provider writes records through
+challtestsrv's management API at `IMP_DNS_API_URL`. impd refuses it unless `IMP_E2E=1`, which only
+the harness sets.
 
 `bun run test:pebble` tests the issuer alone against its own Pebble. It runs in CI. It checks a
 first certificate, a renewal on the same account, an untrusted ACME server, and a Cloudflare that
@@ -317,7 +321,7 @@ refuses the token. Both errors must be readable and must not contain the token.
 
 ## Not yet
 
-- Cloudflare is the only real DNS provider. Another provider implements `DnsProvider` in
+- Cloudflare is the only real DNS provider. To add another, implement `DnsProvider` in
   `packages/daemon/src/network/https/dns/`: add a TXT value, remove it by ID, wait for the
   nameservers, and set, list and remove A records.
 - Public imps have no AAAA records, and the public IP is set by hand.

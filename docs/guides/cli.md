@@ -1,7 +1,9 @@
 # The CLI
 
-`impz` is the command line for impd. It saves the hosts it logs in to, each with its token, and
-`--host` or `impz use` picks one. `scripts/impz` runs it from the repo.
+`impz` is the command line for impd. Whether you run it or write a program that reads its output,
+find the command in the table, then run it, or open its topic's guide. impz saves the hosts it logs
+in to, each with its token; pick one with `--host` or `impz host use`. To run impz from the repo,
+use `scripts/impz`.
 
 | Command                                    | What it does                                                              |
 | ------------------------------------------ | ------------------------------------------------------------------------- |
@@ -16,7 +18,8 @@
 | `fork <source> <name>`                     | copy an imp's disk, or a checkpoint (`--from`)                            |
 | `move <name> <host>`                       | move an imp to another saved host (`--stop` for a cold move)              |
 | `disk resize <name> <size>`                | grow an imp's disk; the guest grows into it                               |
-| `gc [--dry-run]`                           | remove storage no imp, checkpoint or image names                          |
+| `gc [--dry-run]`                           | remove storage that no imp, checkpoint or image uses                      |
+| `db copy [name]`                           | copy impd's database while it runs, under its data directory              |
 | `backup run`, `ls`, `restore`, `check`     | back imps up off the host and restore them                                |
 | `sleep`, `wake`, `hold <name> <time>`      | sleep by hand; keep an imp awake for a while                              |
 | `start`, `stop`, `rm`                      | boot cold, shut down, destroy                                             |
@@ -34,23 +37,29 @@
 | `grant`, `revoke`, `grants`, `audit`       | let an imp use a token through the host-side broker                       |
 | `events [name]`                            | follow impd's events as JSON lines                                        |
 | `mcp --prefix <p>`                         | serve imps to a coding agent as MCP tools over stdio                      |
+| `oauth client`, `grant`, `passkey`         | manage the clients that may sign in, their grants, and passkeys           |
+| `bench`                                    | time create, wake and restore on this host ([benchmarks](./bench.md))     |
 | `token new`, `ls`, `rm`, `key`, `whoami`   | scoped API tokens and their SSH keys, limited to some imps if you like    |
 | `login <url>`, `host ls`, `use`, `rm`      | save impd hosts and their tokens; pick one (`--host`); `hosts` lists them |
 | `completion bash\|zsh\|fish`               | print the shell completion script                                         |
+
+For the flags and rules missing from the table, read each topic's own guide beside this one:
+[copying files](./cp.md), [services](./services.md), [session logs](./session-logs.md),
+[networks](./networks.md), [images](./images.md), [templates](./templates.md),
+[backups](./backups.md), [hosts and moves](./hosts.md), [events](./events.md) and [MCP](./mcp.md).
 
 `--memory` and `--disk` take MiB or a unit (`512m`, `2g`, `1t`); a disk is 32 GiB by default.
 `impz new` and `impz set` take `--cpu-limit` and `--cpu-weight` ([CPU limits](./cpu-limits.md)).
 `--max-memory` (up to 4 × `--memory`) lets the guest grow under memory pressure and shrink when idle
 ([elastic memory](../architecture/lifecycle/elastic-memory.md)). `impz new --no-backup` keeps the
-imp's disk and checkpoints out of every backup ([backups](./backups.md)).
-[Connectors](./connectors.md) covers secrets and grants; [tokens](./tokens.md) covers scopes and
-tailnet identity. Commands that print imps, images, checkpoints or `info` take `--json`.
-`scripts/impz` runs the CLI from the repo.
+imp's disk and checkpoints out of every backup ([backups](./backups.md)). For secrets and grants,
+read [connectors](./connectors.md); for scopes and tailnet identity, read [tokens](./tokens.md).
+Commands that print imps, images, checkpoints or `info` take `--json`.
 
-Other commands exit 0, 1 when impd refuses the call, or 2 for a usage error (an unknown command or
-flag, a missing argument, a bad size, a relative `image build --on-host` path, an `IMP_URL` that is
-not an http URL, an unknown `--host`). `impz exec` and `impz console` exit with the command's own
-code, or 128 + n when signal n ended it, and set these codes themselves:
+Every command but `impz exec` and `impz console` exits 0, 1 when impd refuses the call, or 2 for a
+usage error (an unknown command or flag, a missing argument, a bad size, a relative
+`image build --on-host` path, an `IMP_URL` that is not an http URL, an unknown `--host`). Those two
+exit with the command's own code, or 128 + n when signal n ended it, and set these codes themselves:
 
 | Code | When                                                                                  |
 | ---- | ------------------------------------------------------------------------------------- |
@@ -61,33 +70,34 @@ code, or 128 + n when signal n ended it, and set these codes themselves:
 | 254  | another terminal attached to the session and took it over                             |
 | 255  | impz failed: impd unreachable, a rejected token, an unknown imp, a dropped connection |
 
-`impz console box` starts the session `main`, or attaches to it if it runs (`--session <name>` names
+`impz console box` starts the session `main`, or attaches to it if it runs (`--session <name>` picks
 another, `--no-session` gives a shell that ends with the terminal). Without a terminal on stdin, as
-in a script, it runs without a session unless `--session` names one. Ctrl-] detaches
+in a script, it runs without a session unless you pass `--session`. Ctrl-] detaches
 (`--detach-key ctrl-<key>` or `none`; Escape, Backspace, Tab, Enter and Return cannot be the key),
 and closing the terminal does too: the shell keeps running in the imp, and through a sleep.
+
 `impz sessions box` lists the sessions without waking the imp, `impz attach box [main]` shows the
 session's recent output and goes on live from any machine, and `impz sessions kill box main` ends
 one. One terminal is attached at a time: a new attach takes the session over. When impd restarts,
 the imp sleeps, or the connection drops under an attached terminal, the CLI attaches again by itself
 for up to 60 s, waiting 1 s, then 2 s, then 4 s and at most 8 s between tries. Meanwhile the detach
-key still detaches and Ctrl-C gives up (130); other keys wait for the session. It does not attach
-again once another terminal attached. A detach exits 0.
+key still detaches and Ctrl-C gives up (130); other keys wait for the session. The CLI does not
+attach again once another terminal has attached. A detach exits 0.
 
 A signal to the CLI (Ctrl-C without `-t`, SIGTERM, SIGHUP) goes to the command, except in a session,
-where it detaches; a second one ends the session with 128 + n, so the CLI stops even when the
-command ignores it or impd stopped answering. A signal before the command starts ends the session at
-once, also with 128 + n. With `-t`, Ctrl-C is a key the command reads.
+where the CLI detaches. A second signal ends the session with 128 + n, so the CLI stops even when
+the command ignores the signal or impd stopped answering. A signal before the command starts ends
+the session at once, also with 128 + n. With `-t`, Ctrl-C is a key the command reads.
 
 ## JSON output
 
-A program that reads impz, rather than a person, reads the `--json` output of the commands in
+When a program reads impz, have it read the `--json` output of the commands in
 `packages/cli/json-output-schema.json`, such as `impz info --json` and `impz db copy --json`. That
 file holds one JSON Schema per command, and the schema is the contract: within one major version,
 each field in it keeps its name and type, and a required field stays present. The breaking-change
 check fails a pull request that removes or renames such a field, or drops a command from the file,
 unless the change is marked to ship as a new major
 ([breaking changes](../runbooks/releasing.md#breaking-changes)). A command prints the answer of the
-impd it talks to, so a newer impd can add fields that the schema does not hold, and a reader passes
-over a field it does not know. The `--json` output of any other command or mode, such as
+impd it talks to, so a newer impd can add fields that the schema does not hold. Have your program
+skip each field it does not know. The `--json` output of any other command or mode, such as
 `impz ls --all --json`, can change in any release.

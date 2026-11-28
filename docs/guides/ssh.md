@@ -2,8 +2,9 @@
 
 impd has an SSH gateway. `ssh box@imp` lands in the imp `box`, and wakes it first if it sleeps. Any
 SSH client works: `ssh`, `scp`, `sftp`, git over SSH, and editors that open a remote folder over
-SSH, such as VS Code Remote SSH. The
-[daemon page](../architecture/network/ingress.md#the-ssh-gateway) covers how it works inside impd.
+SSH, such as VS Code Remote SSH. To get that access, do the steps under [Set up](#set-up), then run
+`ssh box@imp`. For how the gateway works inside impd, see the
+[daemon page](../architecture/network/ingress.md#the-ssh-gateway).
 
 ## Set up
 
@@ -14,10 +15,10 @@ SSH, such as VS Code Remote SSH. The
    impz token new laptop --scope exec --imps 'dev-*' --ssh-key ~/.ssh/id_ed25519.pub
    ```
 
-   A key in `authorized_keys` gets every imp. The file is in the `ssh` directory of the data
-   directory: `/var/lib/imp/ssh/authorized_keys` on a server, and in the host container. The file
-   and its directory must not be writable by group or others. impd reads the file again when it
-   changes, so a new key works on the next login.
+   A key in `authorized_keys` that no token binds gets every imp. The file is in the `ssh` directory
+   of the data directory: `/var/lib/imp/ssh/authorized_keys` on a server, and in the host container.
+   The file and its directory must not be writable by group or others. impd reads the file again
+   when it changes, so a new key works on the next login.
 
    ```sh
    # a server: /var/lib/imp is the host's bind mount
@@ -36,7 +37,7 @@ SSH, such as VS Code Remote SSH. The
    ```
 
 3. Add this to `~/.ssh/config`. `imp` is the host's tailnet name; for the dev instance, use
-   `HostName 127.0.0.1` and `Port 2222`.
+   `HostName 127.0.0.1` and `Port 2222` plus `IMP_DEV_PORT_OFFSET`.
 
    ```text
    IgnoreUnknown WarnWeakCrypto
@@ -46,10 +47,10 @@ SSH, such as VS Code Remote SSH. The
    ```
 
    OpenSSH 10.1 and later warn on every connection that does not use a post-quantum key exchange.
-   The gateway's SSH library has none, so `WarnWeakCrypto no` turns the warning off for this host.
-   On the tailnet, the connection also runs inside WireGuard. `IgnoreUnknown` lets an older OpenSSH
-   read the file. Put it at the top, before any `Host` line: OpenSSH applies it only inside a block
-   that matches, but rejects an unknown option in every block it reads.
+   The gateway's SSH library has none, so turn the warning off for this host with
+   `WarnWeakCrypto no`. On the tailnet, the connection also runs inside WireGuard. `IgnoreUnknown`
+   lets an older OpenSSH read the file. Put it at the top, before any `Host` line: OpenSSH applies
+   it only inside a block that matches, but rejects an unknown option in every block it reads.
 
 Then:
 
@@ -71,25 +72,27 @@ Host box.imp
 
 ## Users, keys and imps
 
-- The SSH user names the imp. Commands run as the image's user (its `USER`, else root), as with
+- The SSH user is the imp's name. Commands run as the image's user (its `USER`, else root), as with
   `impz exec`.
 - A login needs `exec` on the imp it names. A key bound to a token has that token's scope and imps.
-  Every key in `authorized_keys` has `exec` and tunnels on every imp, whatever [tokens](./tokens.md)
-  exist: the file is the host owner's.
-- The API audit log names a bound key's login by its token, and a file key's as `key <comment>`. A
-  token name has no space, so the two never look alike.
+  An unbound key in `authorized_keys` has `exec` and tunnels on every imp, whatever
+  [tokens](./tokens.md) exist, because the file is the host owner's. Set
+  `IMP_SSH_AUTHORIZED_KEYS=false` to turn that off ([below](#keys-bound-to-tokens)). A key that is
+  also bound to a token logs in only as its token.
+- In the API audit log, a bound key's login appears under its token's name, and a file key's as
+  `key <comment>`. A token name has no space, so the two never look alike.
 - A line with options (`from=`, `command=`, `restrict`, ...) is skipped, and impd logs why. The
   gateway cannot enforce options, so it does not grant what they would limit. ed25519, ECDSA and RSA
   keys work. FIDO (`sk-`) and DSA keys do not.
 - An unknown imp, an unknown key and a key without `exec` on the imp get the same
   `Permission denied (publickey)`, so nobody can probe for imp names. A refused login wakes nothing.
-- Tailscale identity for SSH logins (checked with `tailscale whois`, as Tailscale SSH does) is not
-  built yet. The API takes a [tailnet identity](./tokens.md#tailnet-identity) already.
+- SSH logins can't use a Tailscale identity (checked with `tailscale whois`, as Tailscale SSH does).
+  The API takes a [tailnet identity](./tokens.md#tailnet-identity).
 
 ## Keys bound to tokens
 
 A key bound to a [token](./tokens.md) logs in as that token: its scope and its imp patterns hold,
-and the audit log names it.
+and the audit log records the login under the token's name.
 
 ```sh
 impz token new laptop --scope exec --imps 'dev-*' --ssh-key ~/.ssh/id_ed25519.pub
@@ -98,23 +101,23 @@ impz token key ls laptop                      # SHA256:... comment
 impz token key rm laptop SHA256:...           # unbind one
 ```
 
-- A login needs `exec` on the imp it names. Every channel of the login, a shell, a command, SFTP,
-  `-L` and `-R` forwards and `-A`, runs on that one imp, so the login check covers them all. A
+- A login needs `exec` on the imp it names. Every channel of the login (a shell, a command, SFTP,
+  `-L` and `-R` forwards, and `-A`) runs on that one imp, so the login check covers them all. A
   `read` token's key opens nothing.
 - A key binds to one token at most, and a token holds up to 16 keys. The same rules as
   `authorized_keys` apply: no options, and no FIDO or DSA keys.
-- impd refuses to bind a key that `authorized_keys` lists, and says to delete the line first. A
+- impd refuses to bind a key that is in `authorized_keys`, and says to delete the line first. A
   binding that stood next to the line would hand the key back its full access the moment the binding
-  was removed. It checks the file's lines even while the file's mode grants nothing. A bound key
+  was removed. impd checks the file's lines even while the file's mode grants nothing. A bound key
   added to the file later still logs in only as its token, and impd then refuses to unbind it or
   delete its token until the line is gone.
-- Removing the key, or its token, ends the logins made with it at once.
+- Removing the key or its token ends that key's logins at once.
 - A token cannot change once made, so a login keeps the scope it was checked with. Change a key's
   reach by binding it to another token.
 
-To move a key from `authorized_keys` to a token: delete its line, then bind it. With every key
-moved, `IMP_SSH_AUTHORIZED_KEYS=false` turns the file off: impd then reads it only to refuse
-bindings, and only bound keys log in.
+To move a key from `authorized_keys` to a token, delete its line, then bind the key. Once every key
+is moved, set `IMP_SSH_AUTHORIZED_KEYS=false` to turn the file off. impd then reads it only to
+refuse bindings, and only bound keys log in.
 
 > **CAUTION:** A token with a key that `authorized_keys` also lists cannot be deleted, and that key
 > cannot be unbound, until the line is gone: `impz token rm` fails with `CONFLICT` and names the
@@ -145,12 +148,12 @@ be a way into other imps, the host container or the network beyond.
 the imp, so the image needs `scp` or `rsync` for them.
 
 A unix socket forward connects as the image's USER, with its groups, as `ssh -L` to sshd does: a
-root-only socket, such as a `docker.sock` for root and the `docker` group, works only when the user
-is in that group. Abstract sockets are not supported.
+socket open only to root and one group, such as a `docker.sock` for root and the `docker` group,
+works only when the user is in that group. Abstract sockets are not supported.
 
 The SFTP server and TCP forwarding need the agent from protocol `0.3.0`, agent forwarding from
 `0.4.0`, unix socket forwarding from `0.6.0`, and remote forwards from `0.9.0`. An imp that still
-runs an older agent answers with `AGENT_OUTDATED`; stop and start it to update it
+runs an older agent answers with `AGENT_OUTDATED`; stop and start the imp to update its agent
 ([operations](./operations.md#upgrade)).
 
 ## Agent forwarding
@@ -167,12 +170,12 @@ git push                      # signed by your agent
 - The imp gets a socket at `/run/imp/ssh-agent/<random>/agent.sock` and `SSH_AUTH_SOCK` points at
   it. As with sshd, forwarding belongs to the connection: once a session asks, every later session
   of that connection gets it, and SFTP never does.
-- The socket and its directory belong to the image's user (mode 0600 and 0700), and the agent also
-  checks each client's uid: only that user and root get through. The socket goes when the connection
-  ends, and `/run` starts empty on every boot.
+- The socket and its directory belong to the image's user (mode 0600 and 0700), and the imp's agent
+  also checks each client's uid: only that user and root get through. The socket goes when the
+  connection ends, and `/run` starts empty on every boot.
 - A forced sleep (`impz sleep`) ends the socket; the connection's next session gets a new one.
 - Without an agent on your machine, `ssh-add` in the imp fails at once. An imp opens at most 16
-  agent channels at a time per connection; more of its clients are closed.
+  agent channels per connection at a time, and closes each client past that.
 - Without agent forwarding in the imp's agent, a command still runs, without `SSH_AUTH_SOCK`, and
   stderr says why. OpenSSH asks for forwarding without waiting for an answer, so there is no other
   way to tell it.
@@ -206,7 +209,7 @@ ssh -N -R /tmp/app.sock:/run/user/1000/app.sock box@imp
 
 ## Sleep and wake
 
-- A login starts the imp's wake at once. A sleeping imp wakes in about 0.2 s from `ssh` to the first
+- A login starts waking the imp at once. A sleeping imp wakes in about 0.2 s from `ssh` to the first
   command's output.
 - An open connection keeps the imp awake, with or without a command running. The idle timeout counts
   from when the connection closes.
@@ -214,19 +217,20 @@ ssh -N -R /tmp/app.sock:/run/user/1000/app.sock box@imp
   vanished without closing does not keep its imp awake.
 - When the imp cannot wake, for example with `RAM_BUDGET_EXCEEDED`, the login still works, and each
   command fails with the reason on stderr and exit status 255.
-- `impz sleep` with a connection open ends the commands it runs (they get SIGHUP), and the next
-  command wakes the imp again.
+- `impz sleep` with a connection open ends the commands running on that connection (they get
+  SIGHUP), and the next command wakes the imp again.
 - impd closes every SSH connection when it stops.
 
 ## Where it listens
 
-`IMP_SSH_PORT` (default 22, `0` turns the gateway off) on IPv4, in the host container's own network
-namespace. That namespace has the tailnet (`tailscale0`), the container's own link and the imps'
-taps. The firewall drops guest traffic to the host container over IPv4 and IPv6
-([networking](../architecture/network/networking.md#the-base-firewall)), so an imp cannot reach the
-gateway.
+The gateway listens on `IMP_SSH_PORT` (default 22; `0` turns it off) over IPv4, in the host
+container's own network namespace. That namespace has the tailnet (`tailscale0`), the container's
+own link and the imps' taps. The firewall drops guest traffic to the host container over IPv4 and
+IPv6 ([networking](../architecture/network/networking.md#the-base-firewall)), so an imp cannot reach
+the gateway.
 
-- On the tailnet, `ssh box@imp` reaches it on port 22. The ACL decides who can connect.
+- On the tailnet, `ssh box@imp` reaches it on port 22. Only the devices the tailnet ACL allows can
+  connect.
 - The systemd unit publishes nothing for SSH.
 - `scripts/dev/dev.sh` publishes it on `127.0.0.1:2222` (plus `IMP_DEV_PORT_OFFSET`).
 

@@ -166,8 +166,8 @@ for its commands.
 
 <!-- repo: commands -->
 
-- `bun verify mcp call <tool> --args '<json>'` acts as a service client: on `prod`, one that only
-  reads; elsewhere, one that reaches only imps named `wv-mcp-*`.
+- `bun verify mcp call <tool> --args '<json>'` acts as a service client that only reads on `prod`,
+  and elsewhere reaches only imps named `wv-mcp-*`.
 
 Name each imp you create `wv-<name>`, or `wv-mcp-<name>` to reach it over MCP. Destroy it before
 `done`.
@@ -180,7 +180,7 @@ Name each imp you create `wv-<name>`, or `wv-mcp-<name>` to reach it over MCP. D
 
 The registry is [create-verify-registry.ts](../../../scripts/verify/create-verify-registry.ts).
 [feature-paths.ts](../../../scripts/verify/feature-paths.ts) holds each feature's `paths` and the
-registry's one `.ignore` list.
+one `.ignore` list.
 
 <!-- /repo -->
 

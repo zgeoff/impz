@@ -13,7 +13,7 @@
 
 ## Architecture
 
-How impz is built: the parts, what each one owns, and what holds whatever a caller does.
+The parts of impz, what each one owns, and the rules that hold whatever a caller does.
 
 - [Overview](./architecture/overview.md) — the path of a request, the topology, the data and the
   rules that cross every part, on one page
@@ -80,8 +80,7 @@ How impz is built: the parts, what each one owns, and what holds whatever a call
 
 ### Where things live
 
-Five areas spread over more than one folder. Each row maps one folder or file to the part it holds
-and the doc that explains that part.
+Look up a part by area to find its folder or file and the doc that explains it.
 
 | Area           | Code                                    | Holds                                                             | Doc                                                                |
 | -------------- | --------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------ |

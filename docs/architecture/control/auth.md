@@ -1,10 +1,11 @@
 # Auth
 
-Every call into impd runs as a caller, and one resolver decides the caller for every route alike:
-the procedures, the exec and tunnel sockets, the upload and the MCP endpoint. A caller has a scope
-and the imps it may reach, and the router checks both before a handler runs. The wake proxy is the
-exception: it serves an imp's own pages to anything that can reach it, and the tailnet's ACL is its
-boundary ([ingress](../network/ingress.md#the-wake-proxy)). The
+Every call into impd but the login, the logout and the wake proxy runs as a caller, and one resolver
+decides the caller for the procedures, the exec and tunnel sockets, the upload and the MCP endpoint.
+Some routes take only some of its sources, as [the dashboard session](#the-dashboard-session) and
+[OAuth](#oauth) say. A caller has a scope and the imps it may reach, and the router checks both
+before a handler runs. The wake proxy serves an imp's own pages to anything that can reach it, and
+the tailnet's ACL is its boundary ([ingress](../network/ingress.md#the-wake-proxy)). The
 [tokens guide](../../guides/tokens.md) covers making tokens and rules.
 
 ## Callers
@@ -40,22 +41,25 @@ named in its input, an image, a grant, or nothing. A call that makes the session
 declares that it needs no session instead. A procedure with no rule is refused to every caller, so a
 new procedure is closed until someone writes its rule, and a contract test fails on it. The router's
 middleware reads the rule from the procedure's metadata before input validation and before the
-handler, and a refusal is `FORBIDDEN` with a reason that says whether the scope or the imps fell
-short. An imp target is checked against the caller's patterns by name, and a call that names a new
-imp, such as a create or a fork, needs a pattern that covers the new name too. Some calls are
-host-wide whatever their input, because what they touch is shared: tokens, secrets and grants,
-networks, backups and the receiving side of a move. A scoped token can be given a list of secrets it
-may grant to its own imps, so an agent can set up an imp without host-wide reach. Such a token may
-not fork or move an imp, because a fork copies grants and a move carries them. A scoped token can
-also be given an image ref prefix, so a service adds its own released images: the access check then
-takes an image add whose name is within the token's patterns and whose ref starts with the prefix
-and is pinned by digest, since a tag can move after the owner trusted it. The same token may pin or
-unpin an image whose name is within its patterns. For a pin, impd reads the ref from the image it
-holds, never from the call's input, and takes the pin only when that ref starts with the prefix.
+handler. A refusal is `FORBIDDEN`, and its reason gives which fell short: the scope or the imps.
 
-The set of target kinds is closed. Authorization stays a rule per procedure in the contract, and a
-need for a new kind of target starts a redesign of authorization, not one more kind and one more
-token column.
+An imp target is checked against the caller's patterns by name, and a call that names a new imp,
+such as a create or a fork, needs a pattern that covers the new name too. Some calls are host-wide,
+because what they touch is shared: tokens, secrets and grants, networks, backups and the receiving
+side of a move.
+
+Grants have one exception: a scoped token can be given a list of secrets it may grant to its own
+imps, so an agent can set up an imp without host-wide reach. Such a token may not fork or move an
+imp, because a fork copies grants and a move carries them. A scoped token can also be given an image
+ref prefix, so a service can add its own released images. Such a token may add an image whose name
+is within its patterns and whose ref starts with the prefix and is pinned by digest, since a tag can
+move after the owner trusted it. The same token may pin or unpin an image whose name is within its
+patterns. For a pin, impd reads the ref from the image it holds, never from the call's input, and
+takes the pin only when that ref starts with the prefix.
+
+The set of target kinds is closed. Authorization stays a rule per procedure in the contract. When a
+procedure needs a new kind of target, redesign authorization instead of adding one more kind and one
+more token column.
 
 ## The dashboard session
 
@@ -63,34 +67,34 @@ The browser never holds an API token. A login takes a token once, the root token
 sets a session cookie that acts with that token's scope. The cookie is HttpOnly and SameSite=Strict,
 and behind TLS it takes the `__Host-` prefix, so no other name under the domain, an imp's included,
 can set it. Its value names the token and an expiry, signed with a key derived from the root token,
-so it survives an impd restart, a new root token ends every session, and impd checks on each request
-that the token still exists.
+so it survives an impd restart and a new root token ends every session. impd also checks on each
+request that the token still exists.
 
 The login and the logout are the contract's two procedures that need no caller. impd answers them
 before it looks for one, and both refuse a request that does not come from the dashboard's own
 origin. A logout clears both cookie names and ends the dashboard's open event streams.
 
 SameSite alone is not enough here. Imps serve pages on other ports of impd's own host, and a browser
-counts those as the same site, so an imp's page could call the API with the owner's session. So the
-API takes the cookie only from the dashboard's own origin, by `Sec-Fetch-Site` or else by an
-`Origin` that names impd, and no origin means no access. The exec, tunnel and MCP routes never take
-the cookie: the dashboard gets exec tickets over the API instead. The proxy strips both cookie names
-from every request it forwards to an imp. An imp's server can still set cookies for the host and log
-the dashboard out by flooding the jar, but it cannot read or use the session.
+counts those as the same site, so an imp's page could call the API with the owner's session. To stop
+that, the API takes the cookie only from the dashboard's own origin, by `Sec-Fetch-Site` or else by
+an `Origin` that names impd, and no origin means no access. The exec, tunnel and MCP routes never
+take the cookie: the dashboard gets exec tickets over the API instead. The proxy strips both cookie
+names from every request it forwards to an imp. An imp's server can still set cookies for the host
+and log the dashboard out by flooding the jar, but it cannot read or use the session.
 
 ## Tailnet identity
 
 With rules set, impd asks Tailscale who is behind a connection's address and gives it the first rule
 that matches by user, tag or any peer; no rule means no access. The address must be the client's
 own: impd asks only about addresses in Tailscale's ranges, which the base firewall drops unless they
-arrive on the tailnet interface ([networking](../network/networking.md#the-base-firewall)), and the
-node's own addresses are no peer, since an imp's traffic out through the node would otherwise get
-the node's tags. Over the HTTPS domain, the proxy hands the client's address to the API in process,
-by a one-time handle it strips from every client request.
+arrive on the tailnet interface ([networking](../network/networking.md#the-base-firewall)), and impd
+treats none of the node's own addresses as a peer, since an imp's traffic out through the node would
+otherwise get the node's tags. Over the HTTPS domain, the proxy hands the client's address to the
+API in process, by a one-time handle it strips from every client request.
 
 A tailnet identity is ambient: a browser on that machine sends it with every page's requests, as it
 would a cookie. So impd takes it only when the `Host` names impd itself, which defeats DNS
-rebinding, and the request comes from impd's own origin or from a client that is no browser.
+rebinding, and only from impd's own origin or from a client that is not a browser.
 
 ## OAuth
 

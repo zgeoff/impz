@@ -2,17 +2,16 @@
 
 The credential broker can tell a service which imp sent a request. It adds an `Imp-Identity` header
 that holds a token signed by impd, and removes every copy of that header the guest sends, so the
-guest cannot write it. A service that keeps state for each imp, such as a task service where each
-imp closes its own tasks, verifies the token and keys that state on the imp it names.
-[Imp identity](../architecture/network/identity.md) explains what the token proves and what it does
-not.
+guest cannot write it. When your service keeps state for each imp, such as a task service where each
+imp closes its own tasks, verify the token and key that state on the imp in the token. For what the
+token proves and what it does not, read [Imp identity](../architecture/network/identity.md).
 
 All values below are invented.
 
 ## Turn it on
 
-1. Give the host an issuer, and restart impd. The issuer names this impd in every token. Two running
-   impds never share one.
+1. Give the host an issuer, and restart impd. Every token carries the issuer, to identify this impd.
+   Give each running impd its own issuer.
 
    ```sh
    IMP_IDENTITY_ISSUER=imp-host-a
@@ -46,17 +45,16 @@ All values below are invented.
    `kid`.
 
 5. Configure the service to accept only the audience `tasks.imp.internal`, and only the issuers
-   whose documents it holds. The service holds one document for each host, and checks a token
-   against the keys of the token's own issuer only. It refuses to start with two documents for one
-   issuer.
+   whose documents it holds. Give the service one document for each host. It checks a token against
+   the keys of the token's own issuer only. It refuses to start with two documents for one issuer.
 
 `--identity` works with `--kind static` and `--kind oauth`, with or without `--upstream`. A preset
 refuses it. `--identity` is part of the secret's binding: to add or remove it on a stored secret,
 use `--replace --rebind`, which drops the secret's grants.
 
-An impd from before this feature has no `features.secretIdentity` and drops the field unread. An
-impd without an issuer reports the feature as false. `impz secret add --identity` checks the feature
-first and fails before it stores anything.
+An impd from before this feature has no `features.secretIdentity` and drops a rule's `identity`
+field unread. An impd without an issuer reports the feature as false. `impz secret add --identity`
+checks the feature first and fails before it stores anything.
 
 ## What the service receives
 
@@ -107,9 +105,9 @@ The token's header and claims, decoded:
 
 ## What the service checks
 
-A service written in TypeScript imports the checks from `@impz/client/identity`. The entry has no
-dependency on the rest of the client. `verifyImpIdentity` takes the header and the pinned documents,
-and answers the imp the token names, or `null` for a token the service must refuse.
+In a TypeScript service, import the checks from `@impz/client/identity`. The entry has no dependency
+on the rest of the client. `verifyImpIdentity` takes the header and the pinned documents, and
+returns the imp in the token, or `null` for a token the service must refuse.
 
 ```ts
 import { loadIdentityIssuers, verifyImpIdentity } from '@impz/client/identity';
@@ -124,7 +122,7 @@ const imp = await verifyImpIdentity(request.headers.get('imp-identity'), {
 });
 ```
 
-A service in another language does the same checks:
+In a service in another language, make the same checks:
 
 1. Check the bearer token, as before.
 2. Refuse a request with no `Imp-Identity` header, or with more than one.
@@ -140,8 +138,8 @@ A service in another language does the same checks:
    The token's life (55 seconds) plus the leeway (5 seconds) is 60 seconds. So the service refuses
    every token from 61 seconds after its `iat`.
 
-7. Refuse a token from a key that the document retires, when the token's `iat` is at or after the
-   retire time, or when `now` is 55 seconds or more past the retire time
+7. Refuse a token from a key in the document's `retire` entry, when the token's `iat` is at or after
+   the retire time, or when `now` is 55 seconds or more past the retire time
    ([replace the key](#replace-the-key)).
 8. Use the pair of `iss` and `sub` as the imp. The same `sub` under another `iss` is another imp.
    Use `imp_name` for logs only.
@@ -152,10 +150,10 @@ refuses with `other-host` when the issuer differs. The session host reads the is
 
 ## Replace the key
 
-A planned change. The service learns the new key before impd signs with it, and the old key stops at
-a time that the document itself carries. `T` is the switch time.
+Plan the change ahead: each service learns the new key before impd signs with it, and the old key
+stops at a time that the document itself carries. `T` is the switch time.
 
-1. Stage the new key, and pick `T` far enough ahead to finish step 2. The change has no cancel.
+1. Stage the new key, and pick `T` far enough ahead to finish step 2. You can't cancel the change.
 
    ```sh
    impz identity key stage --at 2026-12-01T03:00Z
@@ -170,8 +168,8 @@ a time that the document itself carries. `T` is the switch time.
    impz identity jwks > imp-host-a.jwks.json
    ```
 
-3. Wait for `T`. impd then signs with the new key and deletes the old private key. A restart of impd
-   after `T` does the same at its start.
+3. Wait for `T`. impd then signs with the new key and deletes the old private key. When impd
+   restarts after `T`, it does the same at its start.
 
    Expect: `impz identity jwks` shows the new key only.
 
@@ -193,4 +191,4 @@ step 3.
 ## Without the flag
 
 On a secret without `--identity`, the broker still removes every `Imp-Identity` header the guest
-sends, and adds none. A service behind the broker therefore never receives the guest's copy.
+sends, and adds none.

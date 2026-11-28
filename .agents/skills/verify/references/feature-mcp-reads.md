@@ -7,14 +7,14 @@ Run this journey on the `local` target. Before it, run `bun verify use --target 
 also run [On prod](#on-prod), after you have run `done` for each feature on `local` and before
 `publish`.
 
-The journey checks that an MCP client with no person present can read impd through the public MCP
-route: the imps, the images and the event log. Each `mcp` command signs in as the run's service
-client for you, so you pass no token. The journey makes `wv-mcp-reads` with impd's root token, so
-the reads have an imp to find, and destroys it at the end.
+Check that an MCP client with no person present can read impd through the public MCP route: the
+imps, the images and the event log. Each `mcp` command signs in as the run's service client for you,
+so you pass no token. The journey makes `wv-mcp-reads` with impd's root token, so the reads have an
+imp to find, and destroys it at the end.
 
 - Check `data.isError` on each `mcp call`. A tool that fails still gives `ok: true` in the JSON line
   the command prints, with `data.isError: true` and the reason in `data.content[0].text`.
-- When a step gives a result that the end state doesn't expect, run the destroy step at once, so the
+- When a step gives a result that differs from the end state, run the destroy step at once, so the
   next run starts with no `wv-mcp-reads`. Then go on as step 5 of
   [Check a change](../SKILL.md#check-a-change) says.
 
@@ -33,8 +33,8 @@ bun verify action destroy-imp --name wv-mcp-reads
 ## End state
 
 Each field below sits under `data`. Another journey on the same run can leave more imps, so each
-list holds at least what the end state names. Called with no cursor, `imp_event_list` gives each imp
-as it is now, as an `ImpAdded` event, and no history.
+list holds at least the items below. Called with no cursor, `imp_event_list` gives each imp as it is
+now, as an `ImpAdded` event, and no history.
 
 - `mcp tools` gives `server: "impz"` and exactly 15 tools. These five have `inReadTools: true`, and
   the others `false`:
@@ -52,19 +52,19 @@ as it is now, as an `ImpAdded` event, and no history.
 
 ## On prod
 
-These steps read the deployed impd as `service:wringer-ro`, a service client that impd gives the
-`read` scope on every imp. `bun verify` refuses every write to the `prod` target. Run no `action`
-command and no `done` there.
+In these steps you read the deployed impd as `service:wringer-ro`, a service client that impd gives
+the `read` scope on every imp. `bun verify` refuses every write to the `prod` target. Run no
+`action` command and no `done` there.
 
 1. Run `bun verify down` to end the `local` run. Then run `bun verify use --target prod` and
    `bun verify use --feature mcp-reads`.
 
    Expect: `ok: true` from each.
 
-2. Check that the environment variable `IMP_OP_VAULT` is set. It names the 1Password vault of the
-   item `impz verify prod mcp client`, whose `origin` field holds the deployed origin and whose
-   `credential` field holds the secret. When the variable is empty, go to step 6, and report that
-   you could not read the item.
+2. Check that the environment variable `IMP_OP_VAULT` is set. It holds the name of the 1Password
+   vault that stores the item `impz verify prod mcp client`, whose `origin` field holds the deployed
+   origin and whose `credential` field holds the secret. When the variable is empty, go to step 6,
+   and report that you could not read the item.
 3. Start the run with the command below. It reads both fields inside the `attach` command, so no
    other command holds the secret. Never run `op read` on its own: it prints the secret.
 
@@ -94,7 +94,7 @@ command and no `done` there.
    bun verify mcp call imp_event_list
    ```
 
-   Expect: `mcp tools` gives exactly the five tools that End state lists with `inReadTools: true`. A
+   Expect: `mcp tools` gives exactly the five tools marked `inReadTools: true` in End state. A
    client with the `read` scope sees no other tool. Each call gives `isError: false`. When a call
    gives `isError: true`, go to step 6, and report the tool's name and `data.content[0].text`.
 

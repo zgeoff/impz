@@ -2,16 +2,18 @@
 
 An imp has a fixed memory size by default. An elastic imp, created with a max memory, boots at its
 memory size and grows toward its max when it runs low, then gives memory back when it has some to
-spare. The guest holds only what impd has plugged into it, and the [RAM governor](./ram-governor.md)
-admits every grow first, so an elastic imp never takes RAM behind the budget's back.
+spare. Above its memory size, the guest holds only what impd has plugged into it, and the
+[RAM governor](./ram-governor.md) admits every grow first, so the budget counts all the RAM an
+elastic imp grows into.
 
 ## How the guest grows
 
-The mechanism is virtio-mem. A VM boots with its memory size plus a hot-plug region up to its max,
-and the guest kernel onlines plugged memory as movable, so that an unplug can migrate pages away.
-impd asks Firecracker for a plugged size, and the guest plugs or unplugs blocks in its own time.
-impd counts the plugged size, never the requested one, because an unplug can stop partway. It sends
-each request under the imp's lock, so a sleep never sees its guest change size.
+The guest grows through virtio-mem. A VM boots with its memory size plus a hot-plug region up to its
+max, and the guest kernel onlines plugged memory as movable, so that an unplug can migrate pages
+away. impd asks Firecracker for a plugged size, and the guest plugs or unplugs blocks in its own
+time. impd counts the plugged size, never the requested one, because an unplug can stop partway. It
+sends each plug or unplug under the imp's lock, which a sleep takes too, so a sleep never snapshots
+a guest whose size the controller is changing. The sleep's own unplug, below, runs before its pause.
 
 The balloon was the other way to do this. A guest that boots at its max with an inflated balloon
 pays the max at every step, in RSS at boot and in a snapshot as large as the max, where virtio-mem
@@ -20,23 +22,24 @@ returns freed guest pages to the host, and impd never inflates it.
 
 User code runs in the agent's inner container, whose memory limit follows the guest's memory. In an
 elastic guest the agent moves that limit as memory comes and goes, so plugged memory is the user's
-too. A cut after an unplug stops at the container's use plus a margin and goes on down as the use
-falls, so a shrink never makes the kernel kill a user process to fit. impd grows no guest whose
-agent is too old to move its limit, because that container would be killed in memory the guest grew
-into.
+too. After an unplug, the agent lowers the limit no further than the container's use plus a margin,
+and lowers it again as the use falls, so a shrink never makes the kernel kill a user process to fit.
+impd grows no guest whose agent is too old to move its limit, because that container would be killed
+in memory the guest grew into.
 
 ## The controller
 
-The memory controller ticks over the awake elastic imps and reads each guest's available memory from
-the balloon's statistics.
+On each tick, the memory controller reads each awake elastic guest's available memory from the
+balloon's statistics.
 
-- **Grow.** A guest that runs low plugs one step more, up to its max. The governor admits the step
-  and the guest's page structures for it, as it admits a wake, and may sleep idle imps to make room.
-  A grow it refuses leaves the guest at its size, with its own OOM killer. The statistics refresh on
-  a poll, so for a while after a plug they still show the guest from before it, low as it was. The
-  controller therefore grows a guest again only once its statistics count the last step, or once
-  they have missed it for a few polls after the plug landed, so one need costs one step. A grow made
-  after such a miss waits for the statistics to count both steps.
+- **Grow.** A guest whose available memory falls below its grow mark plugs one step more, up to its
+  max. The governor admits the step and the guest's page structures for it, as it admits a wake, and
+  may sleep idle imps to make room. A grow it refuses leaves the guest at its size, with its own OOM
+  killer. The statistics refresh on a poll, so for a while after a plug they still show the guest
+  from before it, low as it was. The controller therefore grows a guest again only once its
+  statistics count the last step, or once they have missed it for a few polls after the plug landed,
+  so a guest gets one step each time it runs low. A grow made after such a miss waits for the
+  statistics to count both steps.
 - **Shrink.** A guest that could give back a step for a minute (`IMP_MEMORY_SHRINK_AFTER_S`) unplugs
   to its spare size: the least size that leaves it a grow step clear of its grow mark. A fixed
   headroom would undo itself, because in a large guest the grow mark passes it and the next tick
@@ -54,9 +57,13 @@ them, but never past its max or the budget.
 
 The cgroup's hard limit on a VM follows what its guest may hold: its memory, plus what is plugged,
 plus room for Firecracker and its page cache. impd moves the limit in an order that never cuts a
-guest short. A cold boot sets it to the memory alone, a wake to the memory plus the snapshot's
-plugged size before the load, a grow raises it before the plug, and a shrink lowers it only once the
-guest holds no more than the target. An impd restart sets it from what each adopted guest holds.
+guest short:
+
+- At a cold boot, when nothing is plugged yet, impd sets it to the memory and that room.
+- At a wake, impd sets it to the memory plus the snapshot's plugged size before the load.
+- At a grow, impd raises it before the plug.
+- At a shrink, impd lowers it only once the guest holds no more than the target.
+- After a restart, impd sets it from what each adopted guest holds.
 
 ## Sleep
 
@@ -69,12 +76,14 @@ restores it, and the controller goes on from there.
 
 - **The max is a few times the memory at most.** Movable memory cannot hold the kernel's own
   allocations, such as page tables, slab and the page structures of plugged memory, so a guest that
-  is mostly plugged memory runs out of kernel memory first. A larger max is refused at create.
-- **The max is within the budget.** The governor admits a boot or a wake by the imp's max, and never
-  admits an imp whose max is larger than the whole budget, because a guest that could grow past the
-  budget would make enforcement sleep every other imp. The check runs at each boot and wake, so a
-  smaller budget set later holds too.
+  is mostly plugged memory runs out of kernel memory first. impd refuses a larger max at create.
+- **The max is within the budget.** At a boot, the governor reserves room for the imp's memory, and
+  at a wake for what the VM owned at its sleep, including the plugged memory it used
+  ([sleep and wake](./sleep-and-wake.md#wake)). It refuses an imp whose max is larger than the whole
+  budget, because a guest that could grow past the budget would make the governor sleep every other
+  imp. The governor checks at each boot and wake, so a budget lowered later applies too.
 - **The max is fixed.** A fork, a backup restore and a move keep it. A move refuses a target that
   cannot keep it, rather than land the imp at a fixed size.
-- **No boot templates.** A template's snapshot has no hot-plug region, and a restore cannot add one,
-  so an elastic imp always boots its kernel ([boot templates](./boot-templates.md)).
+- **An elastic imp never uses a boot template.** A template's snapshot has no hot-plug region, and a
+  restore cannot add one, so an elastic imp always boots its kernel
+  ([boot templates](./boot-templates.md)).

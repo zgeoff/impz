@@ -4,13 +4,12 @@ impd's API is one typed contract, `packages/api`, which the daemon implements an
 calls: the `impz` CLI, the `@impz/client` library on npm, the MCP server and the dashboard. Elysia
 serves the HTTP app, and oRPC serves the contract's procedures under `/rpc`. A few routes sit beside
 it, because they need a shape a procedure call does not have: two-way streams, an upload, the
-dashboard's files, the MCP endpoint, and the routes a move's two hosts speak. [Auth](./auth.md)
-covers who may call what.
+dashboard's files, the MCP endpoint, and the routes a move's two hosts speak
+([moves](../storage/moves.md)). [Auth](./auth.md) covers who may call what.
 
 The contract package splits by role: the contract itself, the schemas its procedures are built from,
 the wire protocols of the routes beside it, and the rules that impd and its clients both apply, such
-as how scopes nest and which imps a pattern allows. A client derives its types from those schemas
-rather than writing them again.
+as how scopes nest and which imps a pattern allows. A client derives its types from those schemas.
 
 ## Procedures
 
@@ -42,19 +41,19 @@ procedure. Each exec WebSocket becomes one exec stream to the agent
 and output and the exit back. When too many bytes wait for the client, impd stops reading from the
 agent, so a slow client slows the guest's process instead of growing impd's memory. If the socket
 still drops a message, impd closes it rather than skip bytes, and a session client resumes from the
-offset it has ([sessions](../guest/sessions.md#generations-boots-and-offsets)). A client that
-vanished without a close is found by ping and let go.
+offset it has ([sessions](../guest/sessions.md#generations-boots-and-offsets)). impd pings to find a
+client that vanished without a close, and lets it go.
 
 A file copy runs a tool of the system drive in the guest as root, with acknowledged windows both
 ways, so a large upload to a slow guest disk, or a large download to a slow client disk, grows
-nobody's memory. A tool runs as root in the guest, so it needs `manage` scope on the imp.
+nobody's memory. A file copy needs `manage` scope on the imp, because its tool runs as root.
 
 A tunnel WebSocket carries one TCP connection of `impz proxy` or one relay of a reverse forward
 ([ingress](../network/ingress.md#tunnels-and-reverse-forwards)). Neither end of a WebSocket can
 pause its reads, so each side acknowledges the bytes it delivered onward and a sender keeps a
-bounded window unacknowledged. A client that sends past the window is closed, so it cannot grow
-impd's memory. The close code tells a clean end from a reset, such as a forced sleep, and from impd
-stopping.
+bounded window unacknowledged. impd closes a client that sends past the window, so it cannot grow
+impd's memory. The close code differs for a clean end, for a reset such as a forced sleep, and for
+impd stopping.
 
 ## Clients
 
@@ -74,27 +73,27 @@ stopping.
 ## Events, audit and telemetry
 
 The database layer writes each change to an imp or checkpoint row, with the reason its caller gives,
-and appends an event row for it in the same transaction, and no other code writes those rows. The
-`events` table is impd's outbox, through `packages/durable`: each row has a `seq` that SQLite never
-reuses, the time, the kind and the imp's record as the change left it. The governor's decisions and
-the execs in an agent go into the same table. A row holds impd's own record of the imp, and the
-event stream presents it in the contract's shape as it reads the row, so the live fields of an
-`imp`, such as the RAM it uses, are those of the read.
+and appends an event row for it in the same transaction, and no other code writes imp or checkpoint
+rows. The `events` table is impd's outbox, through `packages/durable`: each row has a `seq` that
+SQLite never reuses, the time, the kind and the imp's record as the change left it. The governor's
+decisions and the execs in an agent go into the same table. A row holds impd's own record of the
+imp, and the event stream presents it in the contract's shape as it reads the row, so the live
+fields of an `imp`, such as the RAM it uses, are those of the read.
 
 After each commit, impd wakes the readers of the table through a signal in memory that carries no
 event. Each reader then reads the rows past its own cursor, so no event data passes through memory
 and the log keeps the event of a commit even when impd stops right after it. One follower inside
-impd reads from the head at start and feeds the proxy's and the broker's resync when an imp comes or
-goes, the disk usage refresh, the service log follows and the telemetry.
+impd reads from the head at start. It feeds the telemetry, the disk usage refresh, the service log
+follows, and the proxy's and the broker's resync when an imp comes or goes.
 
-The event stream takes the head `seq` before it reads its snapshot of the caller's imps, so no write
-falls in between, then reads the table from that `seq` at its own pace, filtered to those imps. A
-slow reader falls behind and loses nothing. A reader that passes the `seq` and `logId` of its last
-event skips the snapshot and reads on from there, across impd restarts. On such a stream, after a
-snapshot and after each read that held events the caller may not see, impd sends a `Position` with
-the `seq` it read through, so a limited caller's cursor moves past the events it is not shown. A
-stream opened without a cursor gets no `Position` and no `Reset`: a client built before the two
-kinds fails on an event kind it does not know.
+The event stream takes the head `seq` before it reads its snapshot of the caller's imps, so it
+misses no write made between the two, then reads the table from that `seq` at its own pace, filtered
+to those imps. A slow reader falls behind, and loses nothing until a prune passes it. A reader that
+passes the `seq` and `logId` of its last event skips the snapshot and reads on from there, across
+impd restarts. On such a stream, after a snapshot and after each read that held events the caller
+may not see, impd sends a `Position` with the `seq` it read through, so a limited caller's cursor
+moves past the events it is not shown. A stream opened without a cursor gets no `Position` and no
+`Reset`, because a client built before the two kinds fails on an event kind it does not know.
 
 The `logId` lives in the database. A copy that impd writes holds none, and impd clears it at the
 open after an older impd wrote an imp or a checkpoint
@@ -102,13 +101,13 @@ open after an older impd wrote an imp or a checkpoint
 database without one, so a cursor from before a restore or a rollback does not match. A reconciler
 prunes the oldest rows by age and by count. A cursor that a prune passed, or that carries another
 log's ID or a `seq` past the head, gets `Reset` and a new snapshot. A stream opened without a cursor
-knows no `Reset`, so a prune that passes it ends it, and the client's reconnect takes the snapshot.
-`events.list` reads the same way, one page per call.
+knows no `Reset`, so impd ends it when a prune passes it, and the client takes the snapshot when it
+reconnects. `events.list` reads the same way, one page per call.
 
-The audit log writes one row per call that changes something, refused or not, and per exec, console,
+impd writes one audit row per call that changes something, refused or not, and per exec, console,
 SSH, tunnel and reverse-forward open: the procedure, who called, the imp, the outcome and the time,
-never the input. The table is bounded, and its oldest rows go. The broker keeps an audit of its own,
-of each request it sent with a credential and each it refused.
+never the input. The audit table is bounded, and its oldest rows go. The broker keeps an audit of
+its own, of each request it sent with a credential and each it refused.
 
 Telemetry is OpenTelemetry, loaded only when the owner names an OTLP endpoint. It exports lifecycle
 transition counts and durations, governor decisions, RAM, disk, CPU and network use, and spans for

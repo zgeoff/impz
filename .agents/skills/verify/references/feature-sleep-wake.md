@@ -2,7 +2,7 @@
 
 Run this journey on the `local-kvm` target. Before it, run `bun verify use --target local-kvm`,
 `bun verify up` and `bun verify doctor`. Only `local-kvm` boots the guest VM that `exec-imp` needs.
-The journey checks that a sleeping imp wakes when you run a command in it, and keeps the file
+Run the journey to check that a sleeping imp wakes when you run a command in it, and keeps a file
 written before the sleep.
 
 The journey's imp is `wv-sleep`. When a step fails, skip to the last step, `destroy-imp`, so the

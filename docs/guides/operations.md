@@ -1,9 +1,10 @@
 # Operations
 
-Day-to-day care of an imp host: restarts, the RAM budget, logs, and checks. The commands assume the
-dev instance from the [install guide](./install.md). On a server running the release image,
-`systemctl restart imp-host` does what `reboot` does here, and
-`podman exec imp-host pkill -HUP -x impd` what `restart` does.
+To look after an imp host, find the section for the job in hand, such as a restart, an upgrade, a
+backup or a broken container, and run its commands. Sections about a server, such as upgrades and
+restores, give a server's commands; the others assume the dev instance from the
+[install guide](./install.md). On a server running the release image, `systemctl restart imp-host`
+does what `reboot` does here, and `podman exec imp-host pkill -HUP -x impd` what `restart` does.
 
 ## Restart without losing imps
 
@@ -18,8 +19,9 @@ notices. Use `reboot` after a change to `host/`. Data stays in `.data/dev` acros
 
 After a crash (impd or the container killed without a signal), an imp with no live VM comes back
 `stopped` and boots cold on the next use. Its disk is intact; its memory is lost. Sleeping imps stay
-asleep. A VM that the dead impd left behind is adopted or killed, so no imp ends with two.
-[Sleep and wake](../architecture/lifecycle/lifecycle.md#recovery-after-a-restart) has the details.
+asleep. The new impd adopts or kills each VM that the dead impd left behind, so no imp ends with
+two. [Sleep and wake](../architecture/lifecycle/lifecycle.md#recovery-after-a-restart) has the
+details.
 
 ## Upgrade
 
@@ -28,7 +30,7 @@ needs `podman`, `curl` and `jq`, and `docker` only to move a host that runs unde
 no arguments, and it refuses `--compose`.
 
 ```sh
-deploy/upgrade.sh
+bash deploy/upgrade.sh   # the copy from the new image, as below
 ```
 
 Before you move impd to a new major version, move each client that drives it to a release that
@@ -51,9 +53,9 @@ bash deploy/upgrade.sh
 
 <!-- x-release-please-end -->
 
-1. It pulls the image of its own release with Podman. `IMP_HOST_IMAGE` names another image, from the
-   environment, else from a pin in `/etc/imp/imp-host.env`. upgrade.sh stops with nothing changed in
-   these cases:
+1. It pulls the image of its own release with Podman. To pull another image, set `IMP_HOST_IMAGE`:
+   upgrade.sh takes it from the environment, else from a pin in `/etc/imp/imp-host.env`. upgrade.sh
+   stops with nothing changed in these cases:
    - `IMP_HOST_IMAGE` comes from the environment, and `imp-host.service` (drop-ins included) would
      not run that image. Pin it in the env file instead.
    - The env file's last `IMP_HOST_IMAGE=` line is empty, which would give the unit no image.
@@ -68,21 +70,21 @@ bash deploy/upgrade.sh
    restart keeps that image, and then exits with no restart.
 
 2. It sleeps every awake imp through the API, one at a time. If the list or one sleep fails, it
-   stops and the host keeps the old image. The restart in step 4 stops impd, which sleeps the imps
-   too, but only those it sleeps within the stop's 120 s.
+   stops and the host keeps the old image. The restart in step 4 also sleeps the imps as it stops
+   impd, but only those it can sleep within the stop's 120 s.
 3. It installs the new image's seccomp profile in `/etc/imp/imp-host.seccomp.json` and its
    `imp-host.service`, so a change to the [privileges](../architecture/host.md#privileges) reaches
    the server. A unit it replaces stays as `imp-host.service.bak-<time>`. Keep local changes to the
    unit in a drop-in (`imp-host.service.d/`). The installed unit drops the release-please marker
    comments. It stops and disables `imp-docker-proxy` when an older release installed it, because
-   the proxy holds the host's Docker socket, and keeps its unit as
+   the proxy holds the host's Docker socket. It keeps that unit as
    `imp-docker-proxy.service.bak-<time>`.
 
    It turns the env file line `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host:latest` into a comment, so the
    unit runs its release's image: upgrade.sh reads that exact line as a default an older env file
-   template wrote, not as a pin. upgrade.sh rewrites the env file before it installs the unit. It
-   keeps the env file it read as `imp-host.env.bak-<time>`, mode `0600`, and prints that path. Any
-   other value is a pin and stays. To follow `latest` on purpose, pin
+   template wrote, not as a pin. Any other value is a pin and stays. upgrade.sh rewrites the env
+   file before it installs the unit. It keeps the env file it read as `imp-host.env.bak-<time>`,
+   mode `0600`, and prints that path. To follow `latest` on purpose, pin
    `IMP_HOST_IMAGE=ghcr.io/zgeoff/imp-host`, which Podman reads as `latest`.
 
 4. It restarts the host, waits for `/health` to report ready, prints how to roll back, prints the
@@ -112,8 +114,8 @@ host needs them.
 ### Roll back
 
 **CAUTION:** An image whose `imp.host-contract` label is not `no-docker` needs Docker, which
-`podman tag` does not bring back, and upgrade.sh refuses it. To roll back to such an image, use a
-host with Docker and do these steps:
+`podman tag` does not bring back, and upgrade.sh refuses such an image. To roll back to such an
+image, use a host with Docker and do these steps:
 
 1. Run `systemctl stop imp-host`.
 2. On a host with IPv6, run `podman network rm imp-host`. Podman makes that network only with IPv6.
@@ -162,19 +164,22 @@ boots its disk cold. The disk is never touched.
 [Snapshot identity](../architecture/lifecycle/sleep-and-wake.md#snapshot-identity) has the full
 rule:
 
-- A new impd alone, or a new agent drive: memory restores. impd keeps the old drive while a snapshot
-  needs it, and the woken imp runs its old agent until its next cold boot.
-- A new guest kernel: memory restores, and the imp runs its old kernel until its next cold boot.
-- A new Firecracker or host kernel: every sleeping imp boots cold.
+- With a new impd alone, or a new agent drive, memory restores, except across the `system/drives/`
+  change below. impd keeps the old drive while a snapshot needs it, and the woken imp runs its old
+  agent until its next cold boot.
+- With a new guest kernel, memory restores, and the imp runs its old kernel until its next cold
+  boot.
+- With a new Firecracker or host kernel, every sleeping imp boots cold.
 
 An outdated kernel or agent alone never causes a cold boot: the snapshot still loads. The imp picks
-up the new part only at its next stop and start; a sleep and a wake does not clear it.
+up the new part only at its next cold boot, such as a stop and start; a sleep and a wake that
+restores memory keeps the old part.
 
 `impz info` counts both kinds on its `boot status` line, over running and sleeping imps, for example
 `3 will boot cold; outdated: 2 agent`. A sleeping imp counts as a cold boot when its snapshot cannot
-load or is gone. A running imp counts when it runs an older Firecracker or an older impd booted it:
-its next sleep writes a snapshot the host cannot load. `impz info --json` has the same numbers under
-`bootStatus`.
+load or is gone. A running imp counts when it runs an older Firecracker or an impd without
+`system/drives/` booted it: its next sleep writes a snapshot the host cannot load.
+`impz info --json` has the same numbers under `bootStatus`.
 
 In its NOTE column, `impz ls` shows what an upgrade means for each imp:
 
@@ -186,8 +191,8 @@ In its NOTE column, `impz ls` shows what an upgrade means for each imp:
 | `booted by an older impd; its next wake boots cold` | An awake imp that an impd without `system/drives/` booted. Its snapshot cannot name a drive. |
 
 To pick up the new agent or kernel in an outdated imp, run `impz stop <name>` and
-`impz start <name>`. It loses its memory, not its disk. impd deletes the old drive on its next
-start, once no imp uses it.
+`impz start <name>`. The imp loses its memory and keeps its disk. impd deletes the old drive on its
+next start, once no imp uses it.
 
 An imp that runs an agent with a protocol older than `0.8.0` (release v0.7.0 or older) cannot kill
 the rest of a stopped command's process group. When `impz mcp` stops such a command on a timeout or
@@ -210,7 +215,7 @@ impd keeps the RAM of awake imps under `IMP_RAM_BUDGET_MIB`. `impz info` shows t
 measured use, the committed memory of awake imps, and the imp counts.
 
 - When a boot or a wake would go over, impd sleeps the least recently active imps first.
-- An imp with an open session, a request in flight or a hold is never picked.
+- impd never picks an imp with an open session, a request in flight or a hold.
 - When nothing can make room, the request fails with `RAM_BUDGET_EXCEEDED`. Free room with
   `impz sleep` or `impz stop`, or raise the budget.
 
@@ -219,9 +224,9 @@ To keep an imp awake on purpose, hold it: `impz hold box 2h`. `impz hold box 0` 
 ## Disk space and silent agents
 
 A sleep writes the imp's memory to disk. impd refuses the sleep with `DISK_FULL` when the write
-would cut into `IMP_DISK_RESERVE_GIB`; the imp stays awake. Admission fails with `DISK_FULL` too
-when the disk kept impd from sleeping an imp to make RAM room. Free disk on the data volume to clear
-it.
+would cut into `IMP_DISK_RESERVE_GIB`; the imp stays awake. A boot or a wake also fails with
+`DISK_FULL` when a full disk kept impd from sleeping an imp to make room in RAM. Free disk on the
+data volume to clear it.
 
 An agent that stops answering for `IMP_WATCHDOG_TIMEOUT_S` shows `agent silent since …` in `impz ls`
 and the dashboard, and impd logs it. Set `IMP_WATCHDOG_ACTION=restart` to boot such an imp cold, or
@@ -241,8 +246,9 @@ With `IMP_BACKUP_REPOSITORY` set, impd backs up every imp to a restic repository
 
 ## Storage cleanup
 
-impd removes what a crash leaves at start and every hour
-([cleanup](../architecture/storage/disk-space.md#the-sweep)). `impz gc` runs the same sweep now.
+At start and every hour, impd sweeps up what a crash leaves
+([cleanup](../architecture/storage/disk-space.md#the-sweep)). The sweep keeps orphans, as below; it
+removes only what the cleanup doc lists. `impz gc` runs the same sweep now.
 
 - `impz gc --dry-run` lists what would go, and removes nothing.
 - A disk, image, checkpoint or memory snapshot that no row names is an orphan. impd keeps it, with
@@ -294,20 +300,20 @@ impz db copy before-upgrade
   `impVersion` (the impd that wrote it), `createdAt`, and `integrity`: `PRAGMA integrity_check` on
   the copy, `ok` or its first problem. impd keeps a copy whose check fails; do not restore it.
 - It needs a `manage` token with no imp patterns, and leaves a row in the API audit log. The API is
-  `system.copyDatabase` with `{ name? }`. A client checks `features.databaseCopy` in `system.info()`
-  first; an impd older than 0.30.0 lacks the call.
+  `system.copyDatabase` with `{ name? }`. In a client, check `features.databaseCopy` in
+  `system.info()` first; an impd older than 0.30.0 lacks the call.
 
 ### Restore
 
-**CAUTION:** At start, impd deletes each secret value file in `<data>/secrets` that no row of the
-database names. A copy older than a secret has no row for it, so the first start on that copy
-deletes the secret's value, and it cannot be recovered from the host. Copy `<data>/secrets` aside
-before you restore, and expect each secret added after the copy to be lost until you add it again
-with `impz secret add`.
+**CAUTION:** A copy older than a secret has no row for it, so impd loses that secret until you add
+it again with `impz secret add`. At start, impd moves each value file in `<data>/secrets` that no
+row names into a directory it keeps aside, which `impz gc` lists as kind `secrets`
+([storage cleanup](#storage-cleanup)); take the value from there. Copy `<data>/secrets` aside as
+well before you restore.
 
 1. Copy `<data>/secrets` aside.
-2. Stop impd with a full stop that sleeps the imps (`systemctl stop imp-host`), not a restart: a
-   restart leaves the VMs running for the new impd to adopt.
+2. Stop impd with a full stop that sleeps the imps (`systemctl stop imp-host`), not the `pkill -HUP`
+   restart: that restart leaves the VMs running for the new impd to adopt.
 3. Copy `<data>/db/imp.sqlite` with its `-wal` and `-shm` files to a directory outside `<data>/db`,
    in case you need to go back. With impd stopped, the three files agree.
 4. Remove `<data>/db/imp.sqlite-wal` and `<data>/db/imp.sqlite-shm`. A WAL file left beside a
@@ -332,9 +338,10 @@ What the restored database means at start:
   works again, so delete it once more. The SSH keys bound to tokens follow their tokens. The root
   token in `<data>/token` and the keys in `authorized_keys` are files, which a restore does not
   change.
-- **Secrets and grants** are as they were at the copy. The value of a secret added later is deleted
-  at start (see the caution above). A secret deleted later is back as a row with no value: re-add it
-  with `impz secret add <name> --replace`, or delete it.
+- **Secrets and grants** are as they were at the copy. The value of a secret added later is kept
+  aside at start, and the secret is gone until you add it again (see the caution above). A secret
+  deleted later is back as a row with no value: re-add it with `impz secret add <name> --replace`,
+  or delete it.
 
 ## Logs
 
@@ -357,8 +364,8 @@ other checks.
 User code runs in a container inside the guest
 ([agent](../architecture/guest/agent.md#the-inner-container)). When it is down, or its root was
 wiped, `impz exec` fails with `INNER_DOWN` or `EXEC_FAILED`. `impz exec --agent` runs a command as
-root in the agent's own world instead, with busybox, while the container is down too. It needs a
-token with host-wide `manage` scope.
+root in the agent's own world instead, with busybox, and works while the container is down. It needs
+a token with host-wide `manage` scope.
 
 ```sh
 impz exec --agent box -- cat /sys/fs/cgroup/user/cgroup.events   # is anything left inside?
@@ -371,8 +378,8 @@ The user disk is at `/user`. A shell there follows the symlinks it finds, and th
 `cp x /user/link`, where `link` points at `/run`, writes into the agent's world, not the disk. Read
 the disk with care, and copy files in and out with `impz cp`, which resolves paths inside the
 container. Each command shares 32 MiB of memory with the other outer execs. An imp whose agent
-predates protocol `0.16.0` refuses it with `AGENT_OUTDATED`: stop and start the imp to update its
-agent.
+predates protocol `0.16.0` refuses `impz exec --agent` with `AGENT_OUTDATED`: stop and start the imp
+to update its agent.
 
 An outer shell is root in the agent's world. It can kill or ptrace the agent, or `reboot` the guest,
 and either one ends the imp.
@@ -410,8 +417,8 @@ When impd cannot read `/proc/sys/kernel/tainted`, or finds no number in it, it l
 `WARNING impd.imps cannot read the kernel taint flag; imps a kernel oops held stay held` at start.
 Each imp that a kernel oops held in this boot keeps the error `a kernel oops killed firecracker`,
 and its start or wake fails with the same `PRECONDITION_FAILED` error until impd reads the flag
-clear. impd clears the hold of an earlier boot, which it tells by the boot id in
-`/proc/sys/kernel/random/boot_id`.
+clear. impd clears the hold of an earlier boot, and reads the boot id in
+`/proc/sys/kernel/random/boot_id` to tell the boots apart.
 
 To recover:
 
@@ -421,7 +428,8 @@ To recover:
    **CAUTION:** A reboot ends every running imp without its memory. Stop impd first, so that it
    sleeps the imps and writes their memory to disk.
 
-2. Stop impd with a full stop that sleeps the imps (`systemctl stop imp-host`), not a restart.
+2. Stop impd with a full stop that sleeps the imps (`systemctl stop imp-host`), not the `pkill -HUP`
+   restart.
 3. Reboot the host.
 4. Check that impd sees a clear flag: `curl -s http://127.0.0.1:7070/health`. Expect
    `"warnings":[]`.

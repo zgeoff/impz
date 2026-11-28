@@ -1,5 +1,9 @@
 # Tokens and identities
 
+When you own an imp host, decide who may call its impd: make each client a token limited to its
+scope and its imps with `impz token new` ([manage tokens](#manage-tokens)), and give it secrets or
+image names only when it needs them.
+
 Every call to impd runs as someone: a token, the dashboard session made with one, an SSH key, or a
 tailnet member. Each has a scope, and it can be limited to some imps.
 
@@ -31,21 +35,22 @@ such as `dev-*`. Such a token:
 
 - touches only the imps its patterns match. A fork needs both the source and the new name to match,
   and so does a create from a [template](./templates.md): the template's source imp must match.
-- copies into a fork only the source's grants it could make itself, which today is none: the fork's
-  answer names the rest in `grantsNotCopied`. A host-wide caller copies every grant
-  ([forks and grants](./connectors.md#secrets-and-grants)).
+- copies into a fork only the source's grants it could make itself, which today is none: a token
+  with no list of secrets can grant none, and one with a list may not fork
+  ([granting secrets](#granting-secrets)). The fork's answer names the rest in `grantsNotCopied`. A
+  host-wide caller copies every grant ([forks and grants](./connectors.md#secrets-and-grants)).
 - must name the imp it creates. impd never picks a name for it.
 - sees only its imps in lists, in the event stream, in the grants of `impz secret ls`, in
   `impz net ls`, and in both audit logs. Rows of the API audit log that name no imp are hidden from
   it.
-- cannot make host-wide calls, whatever its scope: images, secrets and grants, networks, backups,
-  tokens and `impz exec --agent`, which runs as root outside the imp's container
-  ([outer exec](../architecture/guest/agent.md#execs-and-services)). A grant hands a host secret to
-  an imp, so a `dev-*` token could otherwise grant itself any secret; a network reaches every imp on
-  it. It cannot pass `--net` to `impz new` either. A token made with a list of secrets may grant
-  those ([granting secrets](#granting-secrets)), and no others. A token given an image ref prefix
-  may add, pin and unpin images under its own names ([adding images](#adding-images)), and build
-  none.
+- cannot make the host-wide `manage` calls, whatever its scope: changes to images, secrets and
+  grants, networks, backups and tokens, and `impz exec --agent`, which runs as root outside the
+  imp's container ([outer exec](../architecture/guest/agent.md#execs-and-services)). A grant hands a
+  host secret to an imp, so a `dev-*` token could otherwise grant itself any secret; a network
+  reaches every imp on it. It cannot pass `--net` to `impz new` either. The host owner can open two
+  exceptions, and no others: a token made with a list of secrets may grant those
+  ([granting secrets](#granting-secrets)), and a token given an image ref prefix may add, pin and
+  unpin images under its own names ([adding images](#adding-images)), and build none.
 
 A token with patterns still sees host-wide totals. `system.info` shows the RAM budget, use and
 reserve, the RAM that sleeping imps hold (`ramSleepingMib`), the count of imps, awake and in all,
@@ -128,17 +133,16 @@ The token may not grant a secret's value or change its hosts: secrets, and token
 
 In this version, such a token may not fork an imp or move one: `imps.fork`, `moves.prepare`,
 `moves.send` and `moves.resume` fail with `FORBIDDEN` before they make anything. A move carries the
-imp's grants to the target, so it could hand an imp a secret the list does not name. A fork would
-copy only the grants on the list, checked again in the copy's transaction, but stays refused in this
-version all the same. `moves.abort` stays open to it. The refusal holds while the list names any
-secret, even one that is gone; a list cleared with `impz token set` lifts it. Grants stay with the
-imp through sleep, wake, a checkpoint restore and a restart of impd. A destroyed imp takes its
-grants with it, and an imp made from a [template](./templates.md) gets none. The fork and move
-refusal covers the token's dashboard sessions and the SSH keys bound to it too. `backups.restore`
-stays host-wide.
+imp's grants to the target, so it could hand an imp a secret the list does not name. A fork is
+refused too, though impd could copy only the grants on the list. `moves.abort` stays open to it. The
+refusal holds while the list names any secret, even one that is gone; a list cleared with
+`impz token set` lifts it. Grants stay with the imp through sleep, wake, a checkpoint restore and a
+restart of impd. A destroyed imp takes its grants with it, and an imp made from a
+[template](./templates.md) gets none. The fork and move refusal covers the token's dashboard
+sessions and the SSH keys bound to it too. `backups.restore` stays host-wide.
 
-An impd older than 0.27.0 drops `grantable` unread and makes a token with no list. Before a client
-sends `grantable`, it checks that `system.info()` has `features.grantableTokens`.
+An impd older than 0.27.0 drops `grantable` unread and makes a token with no list. Before you send
+`grantable` from a client, check that `system.info()` has `features.grantableTokens`.
 `impz token new --grantable` does that check, and against an older impd it fails before it makes the
 token.
 
@@ -167,9 +171,9 @@ transaction, whoever made them. This is the rule a rebind follows: the token can
 those grants, so they end. A grant of the secret that a host-wide caller made on one of those imps
 ends too; `grants.add` makes it again. Grants on imps outside the patterns stay.
 
-A grant, a revoke or a fork copy reads the token's list again in its own transaction, so a call
-checked before the change and run after it cannot use a secret taken off. The audit log
-(`impz audit --kind api`) records each `tokens.update` with its caller and outcome.
+A grant or a revoke reads the token's list again in its own transaction, so a call checked before
+the change and run after it cannot use a secret taken off. The audit log (`impz audit --kind api`)
+records each `tokens.update` with its caller and outcome.
 
 An impd older than 0.34.0 has no `tokens.update`. `impz token set` checks that `system.info()` has
 `features.tokenUpdate` first.

@@ -2,7 +2,8 @@
 
 impd serves a web dashboard at `/ui/` on its API port: `http://localhost:7070/ui/` on the host, or
 `http://<tailnet-host>:7070/ui/` on your tailnet. `/` redirects there. With
-[HTTPS on your own domain](./https.md), `https://<IMP_DOMAIN>` opens it.
+[HTTPS on your own domain](./https.md), `https://<IMP_DOMAIN>` opens it. To use it, open that URL
+and [log in](#log-in). To change it, see [Build and run it](#build-and-run-it) and [Tests](#tests).
 
 ## What it shows
 
@@ -11,17 +12,18 @@ impd serves a web dashboard at `/ui/` on its API port: `http://localhost:7070/ui
   and an agent that stopped answering
   ([the watchdog](../architecture/lifecycle/lifecycle.md#the-watchdog)). Each row has the buttons
   that fit its state (sleep, wake, start, stop, restart), the console and destroy. **New imp** opens
-  a form for the name, image, memory, vCPUs and HTTP port; a blank field takes impd's default, as
-  `impz new` does.
+  a form for the name, image, memory, vCPUs and HTTP port; leave a field blank for impd's default,
+  as `impz new` does.
 - **One imp**: its details with disk use, both URLs, CPU use with a form for the limit and the
   weight, the checkpoints (take, restore, fork, delete) and a fork of its disk as it is now.
-- **Console**: a login shell in the browser (xterm.js), as `impz console` opens. It wakes a sleeping
-  imp. Closing the tab ends the shell.
+- **Console**: a login shell in the browser (xterm.js), the one `impz console --no-session` opens,
+  with no detachable session. It wakes a sleeping imp. Closing the tab ends the shell.
 - **Images**: add one from an image ref, or delete one.
 - **RAM**: the budget, what awake imps own, what the governor holds back for boots and wakes, and
   the RAM each awake imp owns and has resident.
-- **Tokens**: make a scoped token, which shows its secret once, or delete one. Only for a `manage`
-  token with no imp patterns ([tokens](./tokens.md)). The nav shows who the session runs as.
+- **Tokens**: make a scoped token, which shows its secret once, or delete one. Only a `manage` token
+  with no imp patterns sees this view ([tokens](./tokens.md)). The nav shows who the session runs
+  as.
 
 Views follow impd's [event stream](./events.md): a change shows as impd makes it. What moves with no
 event, such as RAM in use, sessions and last activity, refreshes every 10 s. When the stream ends,
@@ -29,14 +31,16 @@ the dashboard opens it again after 2 s and refreshes every view.
 
 ## Log in
 
-The login page asks for a token once: the root token in `/var/lib/imp/token` on the host,
+Log in once with a token: the root token in `/var/lib/imp/token` on the host,
 `scripts/dev/dev.sh token` for a dev instance, or a token from `impz token new`. impd answers with a
 session cookie and the browser never keeps the token. The session acts with that token's scope and
 lasts 30 days. Log out clears it in that browser; removing the token ends its sessions, and a new
 root token ends every session. A tailnet member that an
-[`IMP_TAILNET_IDENTITIES`](./tokens.md#tailnet-identity) rule matches needs no login.
-[The daemon](../architecture/control/auth.md#the-dashboard-session) has the details and the security
-model.
+[`IMP_TAILNET_IDENTITIES`](./tokens.md#tailnet-identity) rule matches needs no login. When you
+change the dashboard or its login, keep these rules, because the session cookie stands in for the
+token: the browser never holds the token, and a session carries no more scope than its token and
+ends with it. See [the daemon](../architecture/control/auth.md#the-dashboard-session) for the
+details and the security model.
 
 ## Build and run it
 
@@ -70,11 +74,11 @@ Playwright's pinned Chromium and runs it; it is in the `fast` set CI runs:
 scripts/test-e2e.sh --only dashboard
 ```
 
-On its own, it reads `IMP_URL` (default: the dev instance at `7070 + IMP_DEV_PORT_OFFSET`) and
-`IMP_TOKEN`, and needs `bun run build:dashboard` and `bun run --cwd packages/dashboard e2e:install`
-first.
+To run the test on its own, run `bun run build:dashboard` and
+`bun run --cwd packages/dashboard e2e:install` first. It reads `IMP_URL` (default: the dev instance
+at `7070 + IMP_DEV_PORT_OFFSET`) and `IMP_TOKEN`.
 
 ## Not yet
 
-- Detachable sessions in the console. `impz console` and `impz attach` have them; the console view
+- Detachable sessions in the console view. `impz console` and `impz attach` have them; the view
   takes a terminal source, so attaching to a session is a second source next to the login shell.

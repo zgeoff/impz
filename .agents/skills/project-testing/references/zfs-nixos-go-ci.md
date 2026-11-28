@@ -2,7 +2,7 @@
 
 Test the ZFS backend against the fake first. A real pool costs root, the zfs module and minutes per
 run, so use one only for what the kernel module decides. When this host lacks what a ZFS, NixOS or
-root-only test needs, push the branch and read the CI check that runs it, as [CI](#ci) shows.
+root-only test needs, push the branch and read the result of the check in [CI](#ci) that runs it.
 
 - [ZFS](#zfs)
 - [NixOS](#nixos)
@@ -33,28 +33,30 @@ root-only test needs, push the branch and read the CI check that runs it, as [CI
 - Run the real-pool tests with [`scripts/test-zfs.sh`](../../../../scripts/test-zfs.sh), as root
   with the zfs module loaded. It makes a throwaway pool in a sparse file and sets both variables. On
   exit, it destroys the pool only when `zpool status` shows its own pool file.
-- Run [`scripts/zfs-host-test.sh`](../../../../scripts/zfs-host-test.sh) to run the end-to-end
-  suites on a ZFS-backed dev instance. It needs sudo, Docker, KVM and the zfs module. It runs
-  `test-zfs.sh` on one throwaway pool, then the suites on a second one.
+- Run the end-to-end suites on a ZFS-backed dev instance with
+  [`scripts/zfs-host-test.sh`](../../../../scripts/zfs-host-test.sh). It needs sudo, Docker, KVM and
+  the zfs module. It runs `test-zfs.sh` on one throwaway pool, then the suites on a second one.
 
 Each `.sh` runs the TypeScript entry of the same name,
 [`test-zfs.ts`](../../../../scripts/test-zfs.ts) or
-[`zfs-host-test.ts`](../../../../packages/e2e-harness/src/zfs-host-test.ts). Set the settings below
-only for a run of these scripts: the root preload deletes them in a unit test. Mind the order of the
-words: `IMP_ZFS_TEST_DIR` is the scripts' work folder, and `IMP_TEST_ZFS_DIR` is a test's parent
-folder.
+[`zfs-host-test.ts`](../../../../packages/e2e-harness/src/zfs-host-test.ts). Only these scripts read
+the settings below. The root preload deletes them from a unit test's own environment, so in a test
+of a script, pass them in the env you hand the script, as
+[`zfs-host-test.test.ts`](../../../../packages/e2e-harness/src/zfs-host-test.test.ts) does with the
+fake module version. Mind the order of the words: `IMP_ZFS_TEST_DIR` is the scripts' work folder,
+and `IMP_TEST_ZFS_DIR` is a test's parent folder.
 
-| Setting                       | Script             | What it does                                                                                |
-| ----------------------------- | ------------------ | ------------------------------------------------------------------------------------------- |
-| `IMP_ZFS_TEST_DIR`            | both               | The work folder for the pool files. Unset or empty, the script makes a new temporary one    |
-| `IMP_ZFS_TEST_GIB`            | `test-zfs.sh`      | The size of the pool file                                                                   |
-| `IMP_ZFS_BENCH_GIB`           | `zfs-host-test.sh` | The size of the suites' pool file                                                           |
-| `IMP_ZFS_E2E_SUITES`          | `zfs-host-test.sh` | VM suites to run on the ZFS backend, as `e2e/test-e2e.sh --only` takes them                 |
-| `IMP_ZFS_SHARD`               | `zfs-host-test.sh` | The share of the ZFS suites to run, as `<n>/<count>`. With neither this nor the suites, all |
-| `IMP_ZFS_TEST_UNIT`           | `zfs-host-test.sh` | `0` skips the first `test-zfs.sh` run. CI sets it, and runs `test-zfs.sh` in its own step   |
-| `IMP_DEV_PORT_OFFSET`         | `zfs-host-test.sh` | The port offset of the `imp-zfs` dev instance                                               |
-| `IMP_ZFS_ALLOW_UIOMOVE_BUG`   | `zfs-host-test.sh` | `0` refuses a module without the [zfs_uiomove fix](../../../../docs/architecture/host.md)   |
-| `IMP_ZFS_MODULE_VERSION_FILE` | both               | Where the loaded module's version is read, so a test can fake a loaded module               |
+| Setting                       | Script             | What it does                                                                                   |
+| ----------------------------- | ------------------ | ---------------------------------------------------------------------------------------------- |
+| `IMP_ZFS_TEST_DIR`            | both               | The work folder for the pool files. Unset or empty, the script makes a new temporary one       |
+| `IMP_ZFS_TEST_GIB`            | `test-zfs.sh`      | The size of the pool file                                                                      |
+| `IMP_ZFS_BENCH_GIB`           | `zfs-host-test.sh` | The size of the suites' pool file                                                              |
+| `IMP_ZFS_E2E_SUITES`          | `zfs-host-test.sh` | VM suites to run on the ZFS backend, as `e2e/test-e2e.sh --only` takes them                    |
+| `IMP_ZFS_SHARD`               | `zfs-host-test.sh` | The share of the ZFS suites to run, as `<n>/<count>`. With neither this nor the suites, all    |
+| `IMP_ZFS_TEST_UNIT`           | `zfs-host-test.sh` | `0` skips the first `test-zfs.sh` run. CI sets it, and runs `test-zfs.sh` as a step of shard 1 |
+| `IMP_DEV_PORT_OFFSET`         | `zfs-host-test.sh` | The port offset of the `imp-zfs` dev instance                                                  |
+| `IMP_ZFS_ALLOW_UIOMOVE_BUG`   | `zfs-host-test.sh` | `0` refuses a module without the [zfs_uiomove fix](../../../../docs/architecture/host.md)      |
+| `IMP_ZFS_MODULE_VERSION_FILE` | both               | Where the loaded module's version is read, so a test can fake a loaded module                  |
 
 When a CI row sets both `IMP_ZFS_SHARD` and `IMP_ZFS_E2E_SUITES`, the script runs that share of the
 ZFS suites and the named VM suites.
@@ -65,20 +67,20 @@ ZFS suites and the named VM suites.
   it against stub binaries.
 - In a test that stubs `bun`, run the entry with `process.execPath`, because the `.sh` wrapper would
   find the stub on `PATH`.
-- Point `IMP_ROOT` at a folder of stub scripts to test `zfs-host-test.ts`. It then runs them in
-  place of the checkout's `dev.sh`, `test-e2e.sh` and `test-zfs.sh`.
+- Point `IMP_ROOT` at a folder of stub scripts to test `zfs-host-test.ts`. The script then runs them
+  in place of the checkout's `dev.sh`, `test-e2e.sh` and `test-zfs.sh`.
 
 ## NixOS
 
-- Add a test case that evaluates the NixOS module and checks an option to
-  [`eval.nix`](../../../../deploy/nixos/tests/eval.nix). Start its attribute name with `test`,
-  because nix-unit runs only those.
+- Test a NixOS module option with a case in [`eval.nix`](../../../../deploy/nixos/tests/eval.nix)
+  that evaluates the module and checks the option. Start its attribute name with `test`, because
+  nix-unit runs only those.
 - When several cases read one evaluated NixOS configuration, define that configuration once in the
   `let` of `eval.nix`, because each configuration costs a full evaluation. Above each case that
-  reads it, write a comment that names the configuration and the option its expected value depends
+  reads it, write a comment with the configuration's name and the option its expected value depends
   on.
-- In `eval.nix`, treat a `grep` that must find nothing as passing only on exit status 1. Status 2
-  means grep could not read the file, and must fail the check.
+- In `eval.nix`, treat a `grep` that must find nothing as passing only on exit status 1. Fail the
+  check on status 2, which means grep could not read the file.
 - In [`vm.nix`](../../../../deploy/nixos/tests/vm.nix), make each scenario that changes the host
   restore it and check the restore, so the next scenario starts from the host as the test first
   started it.
@@ -107,12 +109,12 @@ ZFS suites and the named VM suites.
 
 Find the check that runs a test this host cannot:
 
-| Tests                              | Workflow                                           | Check                                     |
-| ---------------------------------- | -------------------------------------------------- | ----------------------------------------- |
-| End-to-end suites, host networking | [`ci.yml`](../../../../.github/workflows/ci.yml)   | `e2e`, from the `e2e-group` jobs; group 2 |
-| ZFS suites and `test-zfs.sh`       | `ci.yml`                                           | `zfs`, from the `zfs-shard` jobs; shard 1 |
-| Agent Go, root-only included       | `ci.yml`                                           | `go`                                      |
-| NixOS module evaluation and VMs    | [`nix.yml`](../../../../.github/workflows/nix.yml) | `eval` and `vm`                           |
+| Tests                              | Workflow                                           | Check                                                                        |
+| ---------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------- |
+| End-to-end suites, host networking | [`ci.yml`](../../../../.github/workflows/ci.yml)   | `e2e`, from the `e2e-group` jobs; only group 2 runs the host networking lane |
+| ZFS suites and `test-zfs.sh`       | `ci.yml`                                           | `zfs`, from the `zfs-shard` jobs; only shard 1 runs `test-zfs.sh`            |
+| Agent Go, root-only included       | `ci.yml`                                           | `go`                                                                         |
+| NixOS module evaluation and VMs    | [`nix.yml`](../../../../.github/workflows/nix.yml) | `eval` and `vm`                                                              |
 
 - The `e2e` and `zfs` checks pass only when every job of their matrix passes, so open the failed
   job's log, not the summary check's.

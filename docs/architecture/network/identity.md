@@ -1,26 +1,26 @@
 # Imp identity
 
-The credential broker adds a secret to an imp's requests, so a service sees a valid credential but
-cannot tell which imp sent the request. A secret can ask the broker to name the imp: impd then
-removes any `Imp-Identity` header the guest sent and adds its own, a short-lived token that impd
-signs. A service that keeps state for each imp verifies the token and keys that state on the imp it
-names. The feature is off until the operator sets an issuer. [The broker](./broker.md) describes the
-request path this extends, and the [operator's guide](../../guides/imp-identity.md) covers the
-commands.
+The credential broker adds a secret to an imp's requests. The service sees a valid credential but
+cannot tell which imp sent the request. When a secret's rule has `identity: true`, impd removes any
+`Imp-Identity` header the guest sent and adds its own, a short-lived token that impd signs. A
+service that keeps state for each imp verifies the token and keys that state on the imp it names.
+The feature is off until the operator sets an issuer. For the request path this extends, see
+[the broker](./broker.md); for the commands, see the
+[operator's guide](../../guides/imp-identity.md).
 
 ## What the token proves
 
 The token proves one fact: a request with this token left the broker's TLS terminator of the impd
 named in `iss`, for the imp in `sub`, bound for the host in `aud`, within the acceptance window `W`.
-`W` is the token life `L` plus the clock leeway `G`
-([the guide](../../guides/imp-identity.md#what-the-service-checks) gives the values). That proof
-rests on these assumptions:
+`W` is the token life `L` plus the clock leeway `G` (values in
+[the guide](../../guides/imp-identity.md#what-the-service-checks)). That proof rests on these
+assumptions:
 
 - The broker names the imp from the connection's two ends, and the strict reverse-path check on the
   taps keeps a guest from sending with another imp's address
   ([the base firewall](./networking.md#the-base-firewall)).
 - The guest cannot read impd's data directory, which holds the signing key.
-- The host and impd are honest. A caller with root on the host signs any identity.
+- The host and impd are honest. A caller with root on the host can sign any identity.
 - impd makes each imp's ID at create, and the create call takes none. A move and a backup restore
   bring an ID from another host or from a backup, so every caller that may send a move to this impd,
   or restore a backup onto it, chooses the ID an imp arrives under.
@@ -29,14 +29,14 @@ rests on these assumptions:
 - The service verifies the issuer, the signature, the audience and the times on every request.
 - The service's clock and impd's clock differ by less than `G`.
 
-The token says nothing about which process in the imp sent the request. Every process in an imp
-shares the imp's identity.
+The token can't tell the processes in an imp apart: every process in an imp shares the imp's
+identity.
 
 A plain header carrying the imp's ID would fail open: any other holder of the service's credential
 could name any imp, and an impd from before this feature would drop the setting and pass the guest's
-own header upstream. A signed token fails closed in both cases, because a forged or stolen
-credential carries no valid signature. The cost is a key that impd keeps, the public half of which
-each service pins, and a verification step in each service.
+own header upstream. A signed token fails closed in both cases, because a header that impd did not
+sign fails verification. The cost is a key that impd keeps, the public half of which each service
+pins, and a verification step in each service.
 
 ## The token
 
@@ -58,16 +58,16 @@ one, and a request that the grant's filter refuses mints none. The token never h
 or value, a grant filter, the imp's address or slot, or anything the guest supplied. An imp's row
 has no owner and no fork parent, so the token has neither.
 
-The issuer is 1 to 128 letters, digits, `.`, `_` and `-`. It has no default, because a fixed default
-gives every host the same issuer, and the container's hostname changes with each container. An impd
+The issuer is 1 to 128 letters, digits, `.`, `_` and `-`. It has no default: a fixed default would
+give every host the same issuer, and the container's hostname changes with each container. An impd
 without the setting reports `secretIdentity` as false in `system.info().features`, refuses to store
 a rule with `identity`, and adds no token for a rule that already has it. The service then refuses
-the request, which carries no token. With the setting, `system.info().identity.issuer` gives the
-value to a session host that records which issuer made an imp.
+the request, which carries no token. With the setting, a session host that records which issuer made
+an imp reads the value from `system.info().identity.issuer`.
 
 The service accepts a token for `W` after its `iat` at most. It refuses a token when `exp - iat` is
 more than `L`, when its clock is more than `G` past `exp`, or when `iat` is more than `G` ahead of
-its clock. The verifier in `@impz/client/identity` holds these rules, with the key rules below.
+its clock. The verifier in `@impz/client/identity` applies these rules and the key rules below.
 
 ## Identity across the lifecycle
 
@@ -80,17 +80,18 @@ its clock. The verifier in `@impz/client/identity` holds these rules, with the k
 | Backup restore         | stays when no other imp on that host holds the ID     |
 | Destroy, then a create | the name can return under another ID                  |
 
-impd has no rename, so a name lasts as long as its imp. A name returns after a destroy, so a service
-keys on the pair of issuer and ID and never on `imp_name`. A fork's disk and memory hold whatever
-IDs the source guest held, such as a task ID, and the fork presents them under its own identity. A
-service that binds state to an imp therefore refuses a fork until the owner binds that state again.
+impd has no rename, so a name lasts as long as its imp. A name returns after a destroy, so key a
+service's state on the pair of issuer and ID, never on `imp_name`. A fork's disk and memory hold
+whatever IDs the source guest held, such as a task ID, and the fork presents them under its own
+identity. A service that binds state to an imp therefore refuses a fork until the owner binds that
+state again.
 
 ## Identity across hosts
 
-A restore checks the ID against the imps of its own host and no other. A backup of an imp that still
-runs on host A, restored on host B, gives a second imp with the same ID. Its grants return when host
-B has a secret of the same name. So the ID alone names two imps, and the pair of issuer and ID names
-one:
+On a restore, impd checks the ID against the imps of its own host only. A backup of an imp that
+still runs on host A, restored on host B, gives a second imp with the same ID. Its grants return
+when host B has a secret of the same name. So the ID alone names two imps, and the pair of issuer
+and ID names one:
 
 - Each impd signs with its own issuer. The restored copy's tokens carry host B's issuer.
 - The service holds one key document for each host, and looks a token's key up in the document of
@@ -103,9 +104,9 @@ one:
 
 A move keeps the ID and changes the issuer, so the service refuses the moved imp until the session
 host records the new issuer. A host that replaces a dead one takes the dead host's issuer, so a
-whole-host restore keeps each identity. The operator makes sure that the old host never runs again
-under that issuer. A fresh ID for a restore on another host would cost more, because impd cannot
-tell whether another host still holds an ID, and a caller such as a session host compares the ID it
+whole-host restore keeps each identity. The operator must make sure that the old host never runs
+again under that issuer. A fresh ID for a restore on another host would cost more: impd cannot tell
+whether another host still holds an ID, and a caller such as a session host compares the ID it
 recorded with the ID of the imp it finds.
 
 ## The key
@@ -115,8 +116,8 @@ a 0700 directory, beside the broker CA. The private key leaves impd in no API an
 backup, and the guest cannot read it. `impz identity jwks` and the `identity.jwks` procedure print
 the public keys as a JWKS document with two more members, which RFC 7517 allows: `issuer`, and
 `retire`. The operator copies that document into each service's configuration. No HTTP route serves
-keys without a token, because a cached fetch would trust an old key for the life of the cache, where
-a pinned document with a `retire` entry needs none.
+keys without a token, because a service that cached a fetched key would trust an old key for the
+life of the cache. A pinned document ends an old key with its `retire` entry.
 
 ## Replacing the key
 
@@ -147,10 +148,10 @@ A service that missed step 2 refuses each K2 token until it gets the document. A
 no cancel, because the services already hold the `retire` entry, and a cancel would make them refuse
 every token after `T`.
 
-When the private key may have leaked, the holder signs tokens until the services drop the key, so
-the order is the reverse, and identity requests fail while it runs: the operator removes the host's
-document from every service, stops impd, removes `<data>/broker/identity/`, starts impd, which makes
-a new key, and puts the new document in every service.
+When the private key may have leaked, whoever holds it can sign tokens until the services drop the
+key, so reverse the order: remove the host's document from every service, stop impd, remove
+`<data>/broker/identity/`, start impd, which makes a new key, and put the new document in every
+service. Identity requests fail while these steps run.
 
 ## The strip rule
 
@@ -169,8 +170,8 @@ method-override names.
 ## The secret field
 
 A rule of a `static` or `oauth` secret carries `identity: true`, which `impz secret add --identity`
-sets on each rule. A preset refuses it. The field is part of the secret's binding: adding or
-removing it on a stored secret fails with `binding_changed` unless the call rebinds, which drops
+sets on each rule. A preset secret can't carry it. The field is part of the secret's binding: adding
+or removing it on a stored secret fails with `binding_changed` unless the call rebinds, which drops
 every grant of the secret. The rules are JSON in the secret's row, so the field needs no migration.
 `system.info().features.secretIdentity` is true on an impd that reads the field and has an issuer,
 and the CLI checks it before it stores anything.
@@ -189,7 +190,7 @@ and the CLI checks it before it stores anything.
 - **A process without the broker's variables,** such as a service from the image's service files.
   Its request reaches no terminator, so the service receives no token and refuses the request.
 - **The method and path.** The token does not bind to them, so a replay within `W` reaches another
-  route of the same audience, and only with the service's credential too.
+  route of the same audience, but only from a caller that also holds the service's credential.
 
 ## Threats
 

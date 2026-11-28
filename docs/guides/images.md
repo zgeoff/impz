@@ -1,7 +1,12 @@
 # Images
 
-An imp boots from any OCI image. impd exports the image's filesystem into a sparse ext4 file once
-per image ID, and each imp disk is a reflink clone of it
+Give your imps an image of your own: add one from a registry with `impz image add`, or write a
+Dockerfile FROM the published base ([make your own](#make-your-own)) and build it with
+`impz image build`. To find why a build was refused or failed, read the sections on limits and
+isolation.
+
+An imp boots from any OCI image that impd can add, within the limits below. impd exports the image's
+filesystem into a sparse ext4 file once per image ID, and each imp disk is a reflink clone of it
 ([storage](../architecture/storage/images.md) covers the pipeline). The image needs no imp bits and
 no init system: the guest kernel boots `imp-agent` from the read-only imp system drive (`/dev/vdb`),
 stays PID 1 there, and runs the image filesystem in an
@@ -37,9 +42,9 @@ in a builder imp, as it does a build, and the host's Docker engine never has the
    host), under the `public` egress policy. A reference with no tag and no digest means `:latest`,
    and impd writes it out. The builder holds no registry credentials, so a private image does not
    pull. Before any builder boots, impd refuses a registry named `localhost` or by an IP address,
-   which needs no resolver to reach the host. A registry name that resolves to a private address
-   fails in the builder's resolver; one that resolves to the host's public address meets the
-   `public` policy's deny list, which `IMP_HOST_ADDRESSES` fills
+   because such a name reaches the host without a resolver. A registry name that resolves to a
+   private address fails in the builder's resolver; one that resolves to the host's public address
+   meets the `public` policy's deny list, which `IMP_HOST_ADDRESSES` fills
    ([public](../architecture/network/egress.md#public)).
 3. impd streams `docker export` out of the builder into the host's `tar` unpack, with every limit of
    an isolated build's step 5, and computes the image's `imp-build-` digest as a build does.
@@ -61,11 +66,10 @@ way: build it with `impz image build` instead.
 `impz image build <directory> --name <name>` packs the directory on the machine that runs the CLI
 and uploads it to impd, which builds it with BuildKit in a throwaway builder imp
 ([isolated builds](#isolated-builds)) and adds the result as the image `<name>`. `--file <path>`
-names a Dockerfile inside the context. A later image can start FROM an image you built this way on
-Docker's containerd image store, where impd pins it by its content digest (Docker 29.8 builds from
-that pin, 29.7 does not; see the digest the build uses, below). The classic store refuses it
-([#156](https://github.com/zgeoff/impz/issues/156)). The published base, `ghcr.io/zgeoff/imp-base`
-by digest as `images/examples/hello` names it, works on both.
+names a Dockerfile inside the context. A later build cannot start FROM an image you built this way:
+the builder pulls each image the build names from its registry, and refuses one with no registry
+digest ([#156](https://github.com/zgeoff/impz/issues/156)). Start FROM the published base,
+`ghcr.io/zgeoff/imp-base`, by digest: copy the FROM line of `images/examples/hello/Dockerfile`.
 
 - **What goes up.** The CLI sends what `docker buildx build <dir>` would. It reads
   `<Dockerfile>.dockerignore` when there is one, else `.dockerignore`, with Docker's rules. Then
@@ -103,12 +107,13 @@ by digest as `images/examples/hello` names it, works on both.
   room.
 - **Limits.** A context may be up to `IMP_BUILD_CONTEXT_MAX_MIB` (default 1024); a larger one fails
   with `PAYLOAD_TOO_LARGE`. At most 4 builds upload or run at once, uploads and builds together; a
-  fifth upload gets `TOO_MANY_REQUESTS` before it sends a byte. The upload answers each refusal with
-  its HTTP status and `{ "code": "...", "message": "..." }`, with the code an oRPC call would give.
-  The disk budget holds room for the tar, its rewrite, and, as the export streams, twice what it has
-  written so far for the unpacked image and its ext4 file, in 256 MiB steps; a disk that fills stops
-  the export with `DISK_FULL` ([storage](../architecture/storage/disk-space.md#the-budget)). Each
-  build's builder imp takes a slot, its memory and its disk like any imp.
+  fifth upload gets `TOO_MANY_REQUESTS` before it sends a byte. impd answers each refused upload
+  with its HTTP status and `{ "code": "...", "message": "..." }`, with the code an oRPC call would
+  give. The disk budget holds room for the tar, its rewrite, and, as the export streams, twice what
+  it has written so far for the unpacked image and its ext4 file, in 256 MiB steps; a disk that
+  fills stops the export with `DISK_FULL`
+  ([storage](../architecture/storage/disk-space.md#the-budget)). Each build's builder imp takes a
+  slot, its memory and its disk like any imp.
 - **Who may build.** A token with `manage` scope and no imp patterns, as for `images.build`. Every
   build leaves an audit row.
 - **What the build may do.** impd runs one fixed BuildKit build in the builder, `docker build -`
@@ -120,10 +125,10 @@ by digest as `images/examples/hello` names it, works on both.
   from Docker Hub when it lacks it.
 - **Images the build names.** Before the build, impd pulls each image that a `FROM`, a `COPY --from`
   or a `RUN --mount=from=` names, a cold pull in the builder with no credentials. It skips `scratch`
-  and the Dockerfile's own stages. impd inspects each image once, for the engine's platform, and
-  refuses an image the host has for another platform, and any image the build names whose config
-  holds `ONBUILD` triggers: the frontend runs the triggers of a `COPY --from` or a
-  `RUN --mount=from=` image too, in this build.
+  and the Dockerfile's own stages. impd inspects each image once, for the engine's platform. It
+  refuses an image the builder pulled for another platform, and any image the build names whose
+  config holds `ONBUILD` triggers, because the frontend runs the triggers of a `COPY --from` or a
+  `RUN --mount=from=` image in this build too.
 - **The digest the build uses.** The Dockerfile the engine gets names each of those images by the
   registry digest of the image impd inspected: `FROM busybox:1.37` becomes `FROM busybox@sha256:…`,
   so a tag that moves in the registry after the pull does not change the build. impd picks the
@@ -246,8 +251,8 @@ image in the ALIASES column. `IMP_DEFAULT_IMAGE` may name an alias.
 
 ## Isolated builds
 
-Each build runs in its own builder imp, which impd destroys when the build ends. Two separate things
-hold for a build, and neither stands in for the other:
+Each build runs in its own builder imp, which impd destroys when the build ends. Each build gets an
+input guard and isolation, and neither stands in for the other:
 
 1. **The input guard** ([#145](https://github.com/zgeoff/impz/issues/145)): impd reads the
    Dockerfile on the host and refuses what the engine would fetch or run on its own, before any
@@ -280,24 +285,24 @@ A build goes:
    over a fixed domain string, the config with its length, and the export, so it never equals a
    Docker image ID or a template's. No host engine reads what the build made, and no Docker tag on
    the host changes. An export fails with `BAD_REQUEST` when its stream, or the disk its entries
-   take, is over `IMP_BUILD_IMAGE_MAX_MIB` (8192). The disk counts each entry, as `tar` lists it, at
-   its full logical size in whole 4 KiB blocks, so a sparse file or many small files cannot pass a
-   small archive off as a small image. An export with more entries than `IMP_BUILD_IMAGE_MAX_FILES`
-   (1,000,000) also fails. The directories `tar` makes for a member's missing parents count as
-   entries and blocks too. impd ends the export at once when a limit trips or `tar` fails, and after
-   120 s in which the builder sends nothing, so a builder that holds its export open still goes. A
-   client that goes before the image row is written, or a row that cannot be written, such as a
-   template that took the name meanwhile, leaves no row and no rootfs the build made; a rootfs
-   another build of the same digest still writes stays.
+   take, is over `IMP_BUILD_IMAGE_MAX_MIB` (8192). impd counts the disk of each entry, as `tar`
+   lists it, at its full logical size in whole 4 KiB blocks, so a sparse file or many small files
+   cannot pass a small archive off as a small image. An export with more entries than
+   `IMP_BUILD_IMAGE_MAX_FILES` (1,000,000) also fails. The directories `tar` makes for a member's
+   missing parents count as entries and blocks too. impd ends the export at once when a limit trips
+   or `tar` fails, and after 120 s in which the builder sends nothing, so a builder that holds its
+   export open still goes. When the client goes before impd writes the image row, or impd cannot
+   write the row, such as when a template took the name meanwhile, impd leaves no row and no rootfs
+   from the build. It keeps a rootfs that another build of the same digest is still writing.
 6. impd destroys the builder, on success, failure or a client that goes. impd destroys a builder it
-   finds at start, which a stop cut short. A builder that survives its removal does not fail its
-   build, whose image impd wrote: impd logs an `ERROR`, tries again every 30 s until it is gone, and
-   `impz ls --builders` shows it meanwhile.
+   finds at start, which a stop cut short. When impd cannot remove a builder, the build still
+   succeeds, with its image written: impd logs an `ERROR`, tries again every 30 s until the builder
+   is gone, and `impz ls --builders` shows it meanwhile.
 
-A builder is impd's while it builds: every stream, exec, wake and change but `impz rm` is refused it
-with `PRECONDITION_FAILED`, the idle loop and the governor never sleep it, and backups leave it out.
-`impz ls` hides builders; `impz ls --builders` shows them, marked `image builder`, and `imps.get`
-shows `kind: builder`.
+A builder is impd's while it builds: impd refuses every stream, exec, wake and change to it except
+`impz rm`, with `PRECONDITION_FAILED`, the idle loop and the governor never sleep it, and backups
+leave it out. `impz ls` hides builders; `impz ls --builders` shows them, marked `image builder`, and
+`imps.get` shows `kind: builder`.
 
 A build costs about 1.5 s for the builder and its dockerd beyond the build itself, and the pulls,
 which start cold in every builder (about 7.5 s for `busybox` and the frontend on a home link). impd
@@ -314,8 +319,8 @@ before it uploads, for an impd without `buildContextUpload` among its features.
 ## Long calls
 
 A pull, an unpack, a build or a template copy can take longer than a client's fetch waits for a
-byte: Bun's fetch gives up after 360 s, Node's (undici) after 300 s. The oRPC calls have streamed
-twins:
+byte: Bun's fetch gives up after 360 s, Node's (undici) after 300 s. Each of these oRPC calls has a
+streaming version:
 
 | Procedure            | Same input as                   | Phases, in order                        |
 | -------------------- | ------------------------------- | --------------------------------------- |
@@ -324,16 +329,17 @@ twins:
 
 Each yields a progress event (`{ type: "progress", phase, elapsedMs }`) as it starts, at each new
 phase and step and every 15 s, then `{ type: "image", image }`. `images.buildStream` with
-`logs: true` yields a `log` event for each line of the build's output too; an older client, which
-reads every event but the image as progress, leaves it out. A failure throws its `ORPCError` through
-the iterator. oRPC also sends a keepalive comment every 5 s. impd writes the audit row as the work
-ends, with its outcome; a refused call is audited at once, as any refused call. `system.info` lists
-`imageOpStream` among the features of an impd that has them, and `imageBuilds` for one that sends
-steps and log events and answers `images.builds`. `impz image add`, `impz image build --on-host` and
-`impz template create` use them when impd does, and show the phase and its time on a terminal; with
-an older impd they call `images.add` or `images.build`, which answer only at the end. The SDK waits
-up to 6 hours for either answer, with Bun's limit on a silent answer lifted. The dashboard calls
-`images.add`.
+`logs: true` yields a `log` event for each line of the build's output too. An older client reads
+every event but `image` as progress, so leave `logs` out for it. A failure throws its `ORPCError`
+through the iterator. oRPC also sends a keepalive comment every 5 s. impd writes the audit row as
+the work ends, with its outcome, and audits a refused call at once, as it does any refused call.
+
+`system.info` lists `imageOpStream` among the features of an impd that has them, and `imageBuilds`
+for one that sends steps and log events and answers `images.builds`. `impz image add`,
+`impz image build --on-host` and `impz template create` use them when impd does, and show the phase
+and its time on a terminal; with an older impd they call `images.add` or `images.build`, which
+answer only at the end. The SDK waits up to 6 hours for either answer, with Bun's limit on a silent
+answer lifted. The dashboard calls `images.add`.
 
 When the client goes, impd stops what it can:
 
@@ -345,15 +351,15 @@ When the client goes, impd stops what it can:
 
 ## What the guest takes from the image
 
-- **The filesystem.** Everything in the image, as it is, except `/run`, which is a fresh tmpfs.
-  `/etc/resolv.conf`, `/etc/hostname` and an empty `/etc/hosts` are rewritten by the agent at boot.
+- **The filesystem.** Everything in the image, as it is, except `/run`, which is a fresh tmpfs. At
+  boot, the agent rewrites `/etc/resolv.conf`, `/etc/hostname` and an empty `/etc/hosts`.
 - **File capabilities and `user.*` attributes.** Of a file's extended attributes, the image keeps
   `security.capability` (what `setcap` writes, such as `cap_net_bind_service+ep` on a server that
   binds a port below 1024 without root) and `user.*`; every other one is dropped. impd needs
   `CAP_SETFCAP` for the first ([host contract](../architecture/host.md#privileges)): without it, an
   image with a file capability fails to add or build. An image added by impd 0.25.1 or older lost
-  its file capabilities, and impd keeps that rootfs for the same image ID: `impz image rm <name>`
-  and add or build it again.
+  its file capabilities, and impd keeps that rootfs for the same image ID: run
+  `impz image rm <name>`, then add or build it again.
 - **`Env`, `WorkingDir`, `User`** from the OCI config. impd writes them to `/etc/imp/image.json`, in
   place of any file the image has there. `/etc` and `/etc/imp` must be directories: an image with a
   symlink or a file at either fails to add or build.
@@ -366,8 +372,8 @@ When the client goes, impd stops what it can:
   `HOME=/root` and `TERM=xterm-256color`, and uses the result as the default for every exec and
   every service. `workdir` is the default exec cwd. `user` is the default exec and service user.
 
-- **Not used:** `Entrypoint`, `Cmd`, `ExposedPorts`, `Volumes`, `Healthcheck`. An imp is a machine,
-  not a container: long-running processes go in `services.d`.
+- **Not used.** The guest ignores `Entrypoint`, `Cmd`, `ExposedPorts`, `Volumes` and `Healthcheck`.
+  An imp is a machine, not a container: put long-running processes in `services.d`.
 
 ## Services
 
@@ -401,9 +407,9 @@ them on a running imp, and `impz logs` prints their logs ([services](./services.
   previous one. A log can grow by up to 60 s of output past the cap between checks.
 - Restarts back off from 1 s, doubling to 60 s. A run of 30 s or more resets the backoff.
 - Run the service in the foreground. A process that forks into the background looks like an exit.
-- There is no ordering between services and no readiness check. A service that needs another one
-  retries on its own (or its wrapper waits).
-- A bad file is logged on the console and skipped; the rest still start.
+- There is no ordering between services and no readiness check. Make a service that needs another
+  one retry on its own, or wrap it in a script that waits.
+- The agent logs a bad file on the console and skips it; the rest still start.
 - A service file you add with `impz exec` lives on the disk, so it survives sleeps, checkpoints,
   restores and forks. It starts at the next boot, or at `impz service restart`
   ([services](./services.md)).
@@ -419,15 +425,14 @@ them on a running imp, and `impz logs` prints their logs ([services](./services.
   and the raw table that Docker 28+ needs. The Firecracker CI kernel does not, and dockerd fails on
   it.
 - Storage is the containerd image store on overlayfs, inside the imp disk.
-- To leave Docker out of an image based on `imp/base`, delete the service:
+- To leave Docker out of an image FROM the published base, delete the service:
   `RUN rm /etc/imp/services.d/docker.json`.
 
 ## Make your own
 
-Any image boots. Start FROM the published base to get Docker and the usual tools. Copy its FROM line
-from `images/examples/hello/Dockerfile`, which names it by digest. `FROM imp/base`, a base you built
-yourself, is pinned by its content digest on the containerd image store and refused on the classic
-store (#156):
+Any image that adds boots. Start FROM the published base to get Docker and the usual tools; impd
+refuses a base you built yourself, such as `FROM imp/base` (#156). Copy the FROM line from
+`images/examples/hello/Dockerfile`, which holds the base's digest:
 
 ```dockerfile
 FROM ghcr.io/zgeoff/imp-base:<tag>@sha256:<digest>
@@ -443,7 +448,7 @@ guest, `curl localhost:8080` answers. The acceptance test uses it for the bring-
 the target of the [wake proxy](../architecture/network/ingress.md#the-wake-proxy)
 (`http://<name>.imp.localhost:7080`).
 
-Notes for images that are not FROM `imp/base`:
+Notes for images that are not FROM the published base:
 
 - Use a glibc or musl userland with `/bin/sh`; the agent itself is static and needs nothing.
 - Nothing in the image runs at boot except `services.d`. There is no systemd, no cron, no sshd.

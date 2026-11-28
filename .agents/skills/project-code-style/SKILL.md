@@ -12,16 +12,17 @@ metadata:
 
 ## Departures
 
-- Keep a method name that a library interface sets, such as `saveTokens`. The Function naming
-  section of [code-style](../code-style/SKILL.md) asks for another verb or a suffix, but the library
-  calls the method by that name.
+- Keep a method name that a library interface sets, such as `saveTokens`, even where the Function
+  names section of [code-style](../code-style/SKILL.md) gives another verb or a suffix, because the
+  library calls the method by that name.
 - Keep the name `on` in a stand-in for Node's process or stdin, because the code under test calls
   the EventEmitter method `on`.
 
 ## The function-verb lint rule
 
-- List each name that a library interface sets in the `exemptNames` option of `zgeoff/function-verb`
-  in [`.oxlintrc.json`](../../../.oxlintrc.json), with a comment above it that names the interface.
+- List each name that a library interface sets, `on` included, in the `exemptNames` option of
+  `zgeoff/function-verb` in [`.oxlintrc.json`](../../../.oxlintrc.json), and write the interface's
+  name in a comment above it.
 
 ## Domain verbs
 

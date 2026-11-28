@@ -2,15 +2,17 @@
 
 A sleep writes an imp's whole memory to a snapshot on disk and ends its Firecracker process, so the
 imp holds no RAM. A wake starts a new Firecracker that loads the snapshot, and the guest goes on
-with every process where it was. The idle loop decides when an imp sleeps, the
-[RAM governor](./ram-governor.md) may sleep one sooner to make room, and the
-[lifecycle](./lifecycle.md) runs both under the imp's lock.
+with every process where it was. An imp sleeps when the idle loop finds it idle, when the
+[RAM governor](./ram-governor.md) needs its room, when a caller asks, or when impd stops on a signal
+that sleeps its VMs ([lifecycle](./lifecycle.md)). The [lifecycle](./lifecycle.md) runs each sleep
+and wake under the imp's lock.
 
 ## Sleep
 
 A snapshot is a pair of files, the VM state and the memory file, and one small record, `meta.json`,
-that commits them. Without the record the files never load, even after a power loss, so the record
-is the only thing a crash has to get right.
+that commits them. A wake loads the files only when their `meta.json` is in place, even after a
+power loss, so the record is the only thing a crash has to get right. Once a wake begins, it holds
+the record as `meta.json.loading` ([Wake](#wake)).
 
 1. Under the imp's lock, impd first holds room on the disk for the whole memory, since the memory
    file is written at full size before its zero pages become holes. When the disk cannot take it,
@@ -24,8 +26,9 @@ is the only thing a crash has to get right.
 4. It waits for one of the host's sleep slots. A snapshot pushes the whole memory file through the
    host's page cache, and a few at a time keep a burst of sleeps from flooding it.
 5. It pauses the VM and has Firecracker write a snapshot into new files: a full snapshot for a VM
-   that booted, and a diff snapshot for a woken one ([woken VMs](#the-sleep-of-a-woken-vm)). A
-   failure here deletes the new files and resumes the VM, and the imp stays awake.
+   that booted, and a diff snapshot for a woken one, except in the cases under
+   [woken VMs](#the-sleep-of-a-woken-vm). If the snapshot fails, impd deletes the new files and
+   resumes the VM, and the imp stays awake.
 6. It kills Firecracker. The VM is paused and its state is on disk, so nothing needs a clean
    shutdown.
 7. It renames the new files over the old ones, digs holes in the memory file where the guest's pages
@@ -36,8 +39,8 @@ is the only thing a crash has to get right.
 impd never writes into a memory file a VM has mapped. A woken VM maps its memory file privately and
 faults pages in from it, so the next sleep always writes new files and renames them over.
 
-The tap stays across a sleep, because the snapshot names it, and a container restart, which removes
-every tap, makes it again before the next wake.
+The tap stays across a sleep, because the snapshot records its name, and a container restart, which
+removes every tap, makes it again before the next wake.
 
 ### The sleep of a woken VM
 
@@ -51,14 +54,15 @@ Before the pause, impd copies the old memory file into the new one, with holes k
 blocks shared where the filesystem clones them. The VM never writes into the file it maps, so the
 copy is whole while the guest runs. Firecracker then writes the dirty pages over the copy, and the
 new file holds the full memory, as a full snapshot would. A VM that tracks no dirty pages, such as
-one that booted cold or restored a template, takes a full snapshot. A guest on huge pages tracks no
-dirty pages and takes a diff all the same ([huge pages](./huge-pages.md#sleep)). A copy that fails
-also leads to a full snapshot, which writes every page over what the copy left.
+one that booted cold or restored a template, takes a full snapshot, with one exception: a guest on
+huge pages tracks none either, but finds its written pages another way and takes a diff
+([huge pages](./huge-pages.md#sleep)). If the copy fails, impd also takes a full snapshot, which
+writes every page over what the copy left.
 
-A diff snapshot that fails can fail after Firecracker cleared its dirty page log, and a later diff
-would then miss the pages that log held. So when any snapshot fails, impd removes the memory file
-the VM woke from, if there is one, before it resumes the VM. The VM keeps its private mapping of
-that file. The next sleep has no file to copy and takes a full snapshot.
+A diff snapshot can fail after Firecracker has cleared its dirty page log, and a later diff would
+then miss the pages that log held. So when any snapshot fails, impd removes the memory file the VM
+woke from, if there is one, before it resumes the VM. The VM keeps its private mapping of that file.
+The next sleep has no file to copy and takes a full snapshot.
 
 ## Wake
 
@@ -66,18 +70,19 @@ that file. The next sleep has no file to copy and takes a full snapshot.
    ([snapshot identity](#snapshot-identity)). With no snapshot, or one this host cannot load, the
    wake boots the disk cold instead.
 2. It sets up the imp's cgroup and asks the governor for room: the larger of what the VM owned at
-   its sleep and a floor for a fresh wake. A wake the budget turns away keeps the imp asleep with
+   its sleep and a floor for a fresh wake. When the budget has no room, the imp stays asleep with
    its snapshot.
 3. It renames `meta.json` to `meta.json.loading`. From here the guest may run and write its disk, so
-   after a crash this snapshot must never load again.
+   after a crash this snapshot loads again only when impd can show the VM never loaded (see the
+   crash paragraph below).
 4. It makes the tap if it is gone, starts Firecracker in the jail, and loads the snapshot as the
    first API call, paused. It seals the jail, so no guest code runs while the VM can still change
    its files ([isolation](../isolation.md#the-jailer)), and resumes the VM.
 5. It pings the agent until the agent answers, and sends it the host's clock. Without that, the
    guest clock stays behind by the time asleep: the guest's clocksource keeps counting from where
-   the snapshot stopped. The wait's deadline covers a guest on huge pages whose memory file is cold
-   ([the warm after a sleep](./huge-pages.md#the-warm-after-a-sleep)): its handler reads each block
-   from disk before the guest can answer.
+   the snapshot stopped. The wait's deadline is long enough for a guest on huge pages whose memory
+   file is cold ([the warm after a sleep](./huge-pages.md#the-warm-after-a-sleep)): its handler
+   reads each block from disk before the guest can answer.
 6. It sets the state to `running` and deletes `meta.json.loading`.
 
 If the load, the jail's seal or the agent fails, impd kills the new VM, drops the snapshot and boots
@@ -88,16 +93,17 @@ A crash during a wake leaves `meta.json.loading`, and the next impd settles it. 
 Firecracker it finds over its API whether the VM started; a VM that never loaded is killed and the
 record goes back to `meta.json`, so the snapshot stays. A VM that loaded gets the rest of the wake,
 and is killed with its snapshot dropped if any step fails. With no VM left, the snapshot is dropped
-and the imp boots cold. One window loses memory it need not: impd dying after the rename and before
-Firecracker starts drops a snapshot no guest ran.
+and the imp boots cold. If impd dies after the rename and before Firecracker starts, the next impd
+drops a snapshot that no guest ran.
 
 ## Snapshot identity
 
 A snapshot loads only on the software and hardware it was made on. A cold boot records what its VM
 booted with, `vm.json`: the Firecracker version and snapshot format, the host kernel, the hashes of
 the guest kernel and the system drive, the drive's path, the CPU model and a hash of its flags, and
-the agent's protocol version. Each sleep copies that into `meta.json`. A wake boots cold when the
-Firecracker version, the snapshot format, the host kernel or the CPU changed. The CPU matters
+the agent's protocol version. Each sleep copies that into `meta.json`. Before the load, a wake boots
+cold when the Firecracker version, the snapshot format, the host kernel or the CPU changed. After
+the load, it also boots cold when the agent's protocol version differs, as below. The CPU matters
 because the guest kernel picked its code paths from the CPU's flags at boot, and a snapshot loaded
 on a CPU without one of them faults later, not at the load. That covers a cloud host whose CPU
 changes at a reboot, and a move to another machine.

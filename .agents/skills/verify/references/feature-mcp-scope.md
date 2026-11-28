@@ -3,13 +3,13 @@
 Run this journey on the `local` target. Before it, run `bun verify use --target local`,
 `bun verify up` and `bun verify doctor`.
 
-The journey checks that an MCP client can act only on the imps that impd's service-clients file
-gives it. The run's client may touch only imps named `wv-mcp-*`. The journey makes `wv-mcp-scope`
-inside that scope and `wv-outside` outside it. Expect impd to refuse `imp_sleep` on `wv-outside`;
-the command still exits 0.
+The journey checks that an MCP client can act only on the imps granted to it in impd's
+service-clients file. The run's client may touch only imps named `wv-mcp-*`. You create
+`wv-mcp-scope` inside that scope and `wv-outside` outside it. Expect impd to refuse `imp_sleep` on
+`wv-outside`; the command still exits 0.
 
-When a step gives a result that the end state doesn't expect, skip to the two destroy steps, so the
-next run starts with neither imp. When the MCP `imp_destroy` fails, run
+When a step's result doesn't match the End state, skip to the two destroy steps, so the next run
+starts with neither imp. When the MCP `imp_destroy` fails, run
 `bun verify action destroy-imp --name wv-mcp-scope`, which exits 0 when the imp is already gone.
 
 ## Journey
@@ -27,7 +27,7 @@ bun verify imps list
 
 ## End state
 
-Each `mcp call` prints an envelope whose `data.isError` says whether the tool failed, and whose
+Each `mcp call` prints an envelope whose `data.isError` is true when the tool failed, and whose
 `data.content[0].text` holds the tool's result. `imps list` acts with impd's root token, so
 `data.imps` lists every imp.
 
