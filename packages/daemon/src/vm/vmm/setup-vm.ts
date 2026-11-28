@@ -27,8 +27,9 @@ interface VmConfig {
   readonly guestMac: string;
 }
 
+// quiet drops the console to level 4, so loglevel=5 after it puts warnings back
 export const BASE_BOOT_ARGS = [
-  'console=ttyS0 reboot=k panic=1 pci=off',
+  'console=ttyS0 quiet loglevel=5 reboot=k panic=1 pci=off',
   'i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd',
   'root=/dev/vdb rootfstype=squashfs ro init=/imp-agent',
 ] as const;

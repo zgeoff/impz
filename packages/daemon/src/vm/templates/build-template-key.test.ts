@@ -11,6 +11,22 @@ test('#TEMPLATE_BOOT_ARGS is the cmdline the agent reads as a template (agent/in
   );
 });
 
+test('#buildTemplateKey gives a fixed key for a fixed identity, so a change to the boot args changes it', () => {
+  const identity = buildMockHostIdentity({
+    firecrackerVersion: 'v1.0.0',
+    snapshotVersion: 'v1.0.0',
+    hostKernel: '6.1.0',
+    guestKernel: 'guest-kernel',
+    systemDrive: 'system-drive',
+    cpuModel: 'cpu-model',
+    cpuFlags: 'cpu-flags',
+  });
+
+  expect(buildTemplateKey(identity, { vcpus: 1, memoryMib: 512 })).toBe(
+    '31a2abfed937cb01e1d7c2ba8bba0c76c836f0808e95263d22c7cc3528cf4dc1',
+  );
+});
+
 test('#buildTemplateKey changes with each thing a restore inherits', () => {
   const identity = buildMockHostIdentity();
   const shape = { vcpus: 1, memoryMib: 512 };

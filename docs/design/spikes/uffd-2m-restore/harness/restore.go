@@ -17,7 +17,7 @@ import (
 // impd's template boot: BASE_BOOT_ARGS and imp.template=1, and the template
 // tap's guest MAC.
 const (
-	templateBootArgs = "console=ttyS0 reboot=k panic=1 pci=off " +
+	templateBootArgs = "console=ttyS0 quiet loglevel=5 reboot=k panic=1 pci=off " +
 		"i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd " +
 		"root=/dev/vdb rootfstype=squashfs ro init=/imp-agent imp.template=1"
 	templateMAC = "06:00:a9:fe:ff:fe"
