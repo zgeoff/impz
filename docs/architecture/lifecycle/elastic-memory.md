@@ -25,6 +25,16 @@ falls, so a shrink never makes the kernel kill a user process to fit. impd grows
 agent is too old to move its limit, because that container would be killed in memory the guest grew
 into.
 
+## Page size
+
+An elastic guest never takes the pool. When the host kernel has transparent huge pages (THP) and
+`IMP_ELASTIC_TRANSPARENT_HUGE_PAGES` is on, the guest's cold boot runs on them, so its memory faults
+in a huge page at a time, and virtio-mem's blocks line up with them: an unplug drops whole huge
+pages. Otherwise the cold boot runs on ordinary pages. A wake restores from the memory file and
+keeps no THP, so the guest runs on ordinary pages until its next cold boot. The memory counts as
+ordinary memory throughout ([huge pages](./huge-pages.md#transparent-huge-pages-for-elastic-imps)
+has the full table).
+
 ## The controller
 
 The memory controller ticks over the awake elastic imps and reads each guest's available memory from

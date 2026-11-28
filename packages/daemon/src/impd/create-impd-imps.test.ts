@@ -188,6 +188,8 @@ test('it logs the host stall from the /proc counters with no reader passed in', 
   expect(ctx.logs).toSatisfyAny(
     (line: string) =>
       line.startsWith('INFO impd.imps imp=plain booted pid ') &&
-      /; host stall .*steal=\d+ms$/u.test(line),
+      /; host stall .*steal=\d+ms(?: thp_fault_alloc=\d+ thp_fault_fallback=\d+ compact_stall=\d+)?$/u.test(
+        line,
+      ),
   );
 });

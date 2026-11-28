@@ -206,7 +206,8 @@ export function makeWakeImpVm(deps: WakeDeps): (imp: LockedImp) => Promise<Locke
   };
 
   const canBootOnPool = (imp: LockedImp): boolean =>
-    pickHugePages(context.config.hugePages !== null, imp) === '2M';
+    pickHugePages({ isOn: context.config.hugePages !== null, isElasticTransparent: false }, imp) ===
+    '2M';
 
   // the guest left its 2 MiB pages behind, and holds no pool pages from here on
   const writeHostPagesIdentity = (imp: LockedImp, paths: ImpPaths): void => {

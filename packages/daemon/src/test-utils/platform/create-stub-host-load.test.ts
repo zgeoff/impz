@@ -34,6 +34,9 @@ test('it writes proc files that readHostLoad reads back as the given load', () =
     ioStallUs: 31_000,
     memoryStallUs: 0,
     stealUs: 640_000,
+    thpFaultAlloc: 812,
+    thpFaultFallback: 4,
+    compactStall: 0,
   });
 
   expect(readHostLoad(ctx.sources)).toStrictEqual({
@@ -41,5 +44,8 @@ test('it writes proc files that readHostLoad reads back as the given load', () =
     ioStallUs: 31_000,
     memoryStallUs: 0,
     stealUs: 640_000,
+    thpFaultAlloc: 812,
+    thpFaultFallback: 4,
+    compactStall: 0,
   });
 });

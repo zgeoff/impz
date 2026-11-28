@@ -21,8 +21,9 @@ export const VmIdentitySchema = z.object({
   cpuModel: z.string().optional(),
   cpuFlags: z.string().optional(),
 
-  // a VM on 2 MiB pages restores only through a page handler, and holds pool pages
-  hugePages: z.enum(['None', '2M']).optional(),
+  // a VM on 2 MiB pages restores only through a page handler, and holds pool pages; one on
+  // transparent huge pages wakes on the host's own pages
+  hugePages: z.enum(['None', '2M', 'Transparent']).optional(),
 });
 
 export type VmIdentity = z.infer<typeof VmIdentitySchema>;

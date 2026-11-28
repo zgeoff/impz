@@ -25,7 +25,7 @@ import type { LockedImp } from './imp-lock';
 import { makeSleepImpVm } from './make-sleep-imp-vm';
 import type { YoungGuestWait } from './make-sleep-imp-vm';
 import { makeWakeImpVm } from './make-wake-imp-vm';
-import { pickHugePages } from './pick-huge-pages';
+import { pickHugePages, readPageSettings } from './pick-huge-pages';
 import { startCounting } from './read-running-imp-usage';
 import { requireNoOopsHold } from './require-no-oops-hold';
 import { findSessionLogImp } from './session-logs/find-session-log-imp';
@@ -160,7 +160,7 @@ export function createImpVmOps(host: ImpContext): ImpVmOps {
     const paths = context.findPaths(imp.id);
     const address = context.findAddress(imp.slot);
     const admitStarted = performance.now();
-    const hugePages = pickHugePages(context.config.hugePages !== null, imp);
+    const hugePages = pickHugePages(readPageSettings(context), imp);
 
     if (hugePages === '2M' && !context.probeUffdDevice()) {
       throw buildUffdDeviceError();
@@ -215,7 +215,7 @@ export function createImpVmOps(host: ImpContext): ImpVmOps {
         ...context.identity,
         agentVersion: vm.agentVersion,
         bootReason: reason,
-        ...(vm.hugePages === '2M' && { hugePages: vm.hugePages }),
+        ...(vm.hugePages !== 'None' && { hugePages: vm.hugePages }),
       });
 
       await updateImpActivity(context.db, imp.id, new Date());

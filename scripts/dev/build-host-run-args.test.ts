@@ -240,6 +240,31 @@ test('it passes the warm cap of a slept memory file, IMP_WARM_CAP_MIB', () => {
   expect(args.join(' ')).toInclude(' -e IMP_WARM_CAP_MIB=96 ');
 });
 
+test('it passes the switch for transparent huge pages of elastic imps', () => {
+  const args = buildHostRunArgs({
+    layout: buildDevLayout({ env: {}, root: '/w/imp', cwd: '/w' }),
+    checkout: {
+      root: '/w/imp',
+      rootPhysical: '/w/imp',
+      hostImage: 'imp-host:dev-test',
+      buildDir: '/w/imp/build',
+    },
+    env: { IMP_ELASTIC_TRANSPARENT_HUGE_PAGES: 'off' },
+    privileges: [],
+    hasEnvFile: false,
+    tailscale: 'none',
+    tailnetOAuthFile: null,
+    acmeCAFile: null,
+    registryCAFile: null,
+    registryHost: null,
+    kernel: '/src/kernel/out/vmlinux',
+    systemDrive: '/src/build/imp-system.squashfs',
+    uplinkMTU: '1500',
+  });
+
+  expect(args.join(' ')).toInclude(' -e IMP_ELASTIC_TRANSPARENT_HUGE_PAGES=off ');
+});
+
 test.each([
   ['off', '-e TAILSCALE_AUTHKEY= '],
   ['key', '-e TAILSCALE_AUTHKEY '],

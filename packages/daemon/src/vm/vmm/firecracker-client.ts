@@ -25,9 +25,10 @@ interface BootSource {
   readonly bootArgs: string;
 }
 
-// Firecracker's page sizes for guest memory: the host's own, or 2 MiB hugetlb
-// pages, which restore only through a UFFD handler.
-export type HugePages = 'None' | '2M';
+// Firecracker's page sizes for guest memory: the host's own, 2 MiB hugetlb pages, which restore
+// only through a UFFD handler, or the host's transparent huge pages, which Firecracker asks for
+// with madvise and which a file-backed restore does not keep.
+export type HugePages = 'None' | '2M' | 'Transparent';
 
 interface MachineConfig {
   readonly vcpuCount: number;
@@ -231,18 +232,27 @@ export function createFirecrackerClient(
         kernel_image_path: source.kernelImagePath,
         boot_args: source.bootArgs,
       }),
-    putMachineConfig: (config) =>
-      sendPut('/machine-config', {
+    putMachineConfig: async (config) => {
+      // Firecracker refuses the memory of a huge-page guest that is not whole 2 MiB pages, and
+      // its message does not say which setting is at fault.
+      if (config.hugePages !== 'None' && config.memSizeMib % 2 !== 0) {
+        throw new Error(
+          `${config.hugePages} huge pages need a whole number of 2 MiB pages, and ${String(config.memSizeMib)} MiB is not`,
+        );
+      }
+
+      await sendPut('/machine-config', {
         vcpu_count: config.vcpuCount,
         mem_size_mib: config.memSizeMib,
-        ...(config.hugePages === '2M' && { huge_pages: '2M' }),
-      }),
+        ...(config.hugePages !== 'None' && { huge_pages: config.hugePages }),
+      });
+    },
     loadMachineConfig: async () => {
       const parsed = await readAnswer('/machine-config', MachineConfigSchema);
 
       return {
         isTrackingDirtyPages: parsed.track_dirty_pages === true,
-        hugePages: parsed.huge_pages === '2M' ? '2M' : 'None',
+        hugePages: readHugePages(parsed.huge_pages),
       };
     },
     putDrive: (drive) =>
@@ -344,6 +354,10 @@ export function createFirecrackerClient(
       return parsed.state;
     },
   };
+}
+
+function readHugePages(reported: string | undefined): HugePages {
+  return reported === '2M' || reported === 'Transparent' ? reported : 'None';
 }
 
 function toMib(bytes: number): number {

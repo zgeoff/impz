@@ -231,6 +231,34 @@ test('it refuses a guest on 4 KiB pages that fits the whole budget but not the R
   });
 });
 
+test('it counts an awake elastic guest on transparent huge pages against the RAM outside the pool, and none of the pool', async () => {
+  // transparent huge pages are ordinary memory: the guest holds no hugetlb page and asks for no pool
+  const host = createStubGovernedHost({
+    budgetMib: 4000,
+    ids: ['elastic', 'x', 'y'],
+    awake: [{ id: 'elastic', rssMib: 800, hugePagesMib: 0, hugetlbMib: 0 }],
+    hugePool: { totalMib: 3000, freeMib: 3000 },
+  });
+
+  const governor = createRamGovernor({ ...host.deps });
+
+  const refusal = await governor
+    .admit({ id: 'x', name: 'x', reserveMib: 300, memoryMib: 600, maySleepImps: false })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  expect(refusal).toMatchObject({
+    code: 'RAM_BUDGET_EXCEEDED',
+    data: { budgetMib: 1000, usedMib: 800, requestedMib: 300 },
+  });
+
+  expect(
+    governor.admit({ id: 'y', name: 'y', reserveMib: 64, memoryMib: 3000, hugePagesMib: 3000 }),
+  ).resolves.toBeUndefined();
+});
+
 test('it refuses a guest on 4 KiB pages whose memory is larger than the RAM outside the pool', () => {
   const host = createStubGovernedHost({
     budgetMib: 4000,

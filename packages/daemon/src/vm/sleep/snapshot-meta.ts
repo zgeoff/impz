@@ -25,7 +25,7 @@ const SnapshotIdentitySchema = z.object({
   ipv6Prefix: z.string().nullable().optional(),
   cpuModel: z.string().optional(),
   cpuFlags: z.string().optional(),
-  hugePages: z.enum(['None', '2M']).optional(),
+  hugePages: z.enum(['None', '2M', 'Transparent']).optional(),
 });
 
 const AGENT_RECORD_JSON = { useProtoFieldName: true, alwaysEmitImplicit: true } as const;

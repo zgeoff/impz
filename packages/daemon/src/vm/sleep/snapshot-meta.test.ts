@@ -243,6 +243,31 @@ test('#readSnapshotMeta reads the meta of a newer impd without its unknown field
   expect(readSnapshotMeta(ctx.paths)).toStrictEqual(meta);
 });
 
+test.each(['None', '2M', 'Transparent'] as const)(
+  '#readSnapshotMeta reads a snapshot recorded on %s pages',
+  (hugePages) => {
+    const ctx = setupTest();
+
+    const meta = {
+      firecrackerVersion: 'v1.17.0',
+      snapshotVersion: 'v12.0.0',
+      hostKernel: '6.6.87',
+      guestKernel: '1b2c3d',
+      systemDrive: '4e5f6a',
+      createdAt: 1,
+      memoryMib: 512,
+      ramMib: 60,
+      hugePages,
+    };
+
+    writeFileSync(ctx.paths.vmstate, 'vmstate');
+    writeFileSync(ctx.paths.memFile, 'mem');
+    writeFileSync(ctx.paths.snapshotMeta, JSON.stringify(meta));
+
+    expect(readSnapshotMeta(ctx.paths)).toStrictEqual(meta);
+  },
+);
+
 test('#readSnapshotMeta reads no snapshot without its memory file', () => {
   const ctx = setupTest();
 

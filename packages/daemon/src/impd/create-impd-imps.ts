@@ -29,6 +29,7 @@ import type { HostIdentity } from '../vm/sleep/vm-identity';
 import { buildImpPaths } from '../vm/storage/build-imp-paths';
 import { createCpuCgroups } from '../vm/vmm/cpu-cgroups';
 import { createJails } from '../vm/vmm/create-jails';
+import { probeTransparentHugePages } from '../vm/vmm/probe-transparent-huge-pages';
 import { probeUffdDevice } from '../vm/vmm/probe-uffd-device';
 import { readHugePagePool } from '../vm/vmm/read-huge-page-pool';
 import { checkGuestMemoryMergeable, readKsmProfitMib } from '../vm/vmm/read-ksm-host-stats';
@@ -282,6 +283,8 @@ function resolveImpBoundaries(boundaries: Readonly<ImpBoundaries>) {
     readUnsharedRamMib: boundaries.readUnsharedRamMib ?? readUnsharedRamMib,
     checkGuestMerge: boundaries.checkGuestMerge ?? checkGuestMemoryMergeable,
     probeUffdDevice: boundaries.probeUffdDevice ?? (() => probeUffdDevice()),
+    probeTransparentHugePages:
+      boundaries.probeTransparentHugePages ?? (() => probeTransparentHugePages()),
     readKsmProfitMib: boundaries.readKsmProfitMib ?? readKsmProfitMib,
     readHugePagePool: boundaries.readHugePagePool ?? (() => readHugePagePool()),
     readHugetlbMib:

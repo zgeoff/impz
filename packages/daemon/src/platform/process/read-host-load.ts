@@ -7,6 +7,11 @@ export interface HostLoad {
   readonly ioStallUs: number | null;
   readonly memoryStallUs: number | null;
   readonly stealUs: number | null;
+
+  // the host-wide counters of /proc/vmstat, which count from the host's boot
+  readonly thpFaultAlloc: number | null;
+  readonly thpFaultFallback: number | null;
+  readonly compactStall: number | null;
 }
 
 export interface HostLoadSources {
@@ -24,6 +29,7 @@ export function readHostLoad(sources: Readonly<HostLoadSources>): HostLoad {
     ioStallUs: parsePressureTotal(readProc('pressure', 'io')),
     memoryStallUs: parsePressureTotal(readProc('pressure', 'memory')),
     stealUs: parseStealUs(readProc('stat')),
+    ...buildVmstatCounters(readProc('vmstat')),
   };
 }
 
@@ -63,4 +69,21 @@ function parseStealUs(stat: string | null): number | null {
   const steal = fields?.[STEAL_FIELD];
 
   return steal === undefined ? null : Number(steal) * US_PER_TICK;
+}
+
+function buildVmstatCounters(
+  vmstat: string | null,
+): Pick<HostLoad, 'compactStall' | 'thpFaultAlloc' | 'thpFaultFallback'> {
+  const findCounter = (name: string): number | null => {
+    const found =
+      vmstat === null ? null : new RegExp(`^${name} (?<count>\\d+)$`, 'mv').exec(vmstat);
+
+    return found?.groups?.['count'] === undefined ? null : Number(found.groups['count']);
+  };
+
+  return {
+    thpFaultAlloc: findCounter('thp_fault_alloc'),
+    thpFaultFallback: findCounter('thp_fault_fallback'),
+    compactStall: findCounter('compact_stall'),
+  };
 }
