@@ -271,10 +271,12 @@ function removePartialFiles(paths: ImpPaths): void {
   for (const path of [
     paths.vmstate,
     paths.memFile,
+    paths.memTouched,
     paths.snapshotMeta,
     paths.vmIdentity,
     slot.vmstate,
     slot.memFile,
+    slot.memTouched,
     slot.snapshotMeta,
   ]) {
     rmSync(`${path}.new`, { force: true });

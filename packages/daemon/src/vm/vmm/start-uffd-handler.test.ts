@@ -72,6 +72,30 @@ test('#startUffdHandler starts the handler on the imp socket with the memory fil
   expect(readHandlerState(paths)).toStrictEqual({ state: 'alive', pid });
 });
 
+test("#startUffdHandler hands the handler an empty file to mark the blocks it serves in, and removes the last run's", async () => {
+  const ctx = setupTest();
+  const paths = ctx.createImpDir('vm');
+  const handler = createStubUffdHandler(ctx.directoryPath);
+  const memFile = join(ctx.directoryPath, 'mem');
+
+  writeFileSync(memFile, 'guest pages');
+  writeFileSync(paths.uffdTouchedFile, Buffer.from([1, 1, 1]));
+
+  const pid = await startUffdHandler({
+    handlerBin: handler.path,
+    paths,
+    memFile,
+    jail: null,
+    cgroup: null,
+  });
+
+  onTestFinished(() => {
+    stopPid(pid);
+  });
+
+  expect(readFileSync(paths.uffdTouchedFile)).toHaveLength(0);
+});
+
 test('#startUffdHandler hands a jailed imp handler the jail user', async () => {
   const ctx = setupTest();
   const paths = ctx.createImpDir('vm');

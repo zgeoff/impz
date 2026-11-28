@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { readImpEnv } from '@impz/shared/test-utils/read-imp-env';
 import { startTestImpd } from '@impz/testing/stand-in/start-test-impd';
 import { StubVmError } from '@impz/testing/stand-in/vm/build-stub-vmm';
@@ -1319,7 +1319,9 @@ test("it warms a 2M imp's memory file after its sleep when its data fills the ca
 
   await waitFor(() => {
     expect(ctx.logs).toSatisfyAny((line: string) =>
-      /^INFO impd\.imps imp=dev warmed the memory file in \d+ms: 32 blocks of 2 MiB$/u.test(line),
+      /^INFO impd\.imps imp=dev warmed the whole memory file in \d+ms: 32 blocks of 2 MiB$/u.test(
+        line,
+      ),
     );
   });
 
@@ -1328,6 +1330,39 @@ test("it warms a 2M imp's memory file after its sleep when its data fills the ca
   expect(ctx.uffdHandler.readWarmRuns().map((run) => [run.mode, run.memFile])).toStrictEqual([
     ['--count-data', memFile],
     ['--warm', memFile],
+  ]);
+});
+
+test("it warms only the blocks a 2M imp's last wake served when its sleep kept a record of them", async () => {
+  updateEnv('IMP_HUGE_PAGES', '2M');
+
+  const ctx = await setupTest();
+
+  ctx.hugePool.totalMib = 4096;
+  ctx.hugePool.freeMib = 4096;
+
+  ctx.uffdHandler.answerWarm({ blocks: 7 });
+
+  await ctx.createTestImage('ubuntu');
+
+  const created = await ctx.client.imps.create({ name: 'dev', memoryMib: 256 });
+
+  const paths = buildImpPaths(ctx.dataDir, created.id);
+
+  mkdirSync(paths.runDir, { recursive: true });
+  writeFileSync(paths.uffdTouchedFile, Buffer.from([1, 0, 1]));
+
+  await ctx.client.imps.sleep({ name: 'dev' });
+
+  await waitFor(() => {
+    expect(ctx.logs).toSatisfyAny((line: string) =>
+      /^INFO impd\.imps imp=dev warmed 7 recorded blocks of the memory file in \d+ms$/u.test(line),
+    );
+  });
+
+  expect(ctx.uffdHandler.readWarmRuns().map((run) => [run.mode, run.blockList])).toStrictEqual([
+    ['--count-blocks', paths.memTouched],
+    ['--warm-blocks', paths.memTouched],
   ]);
 });
 
@@ -1347,7 +1382,9 @@ test('it warms by default the memory file of a 2M imp of 2 GiB whose data fills 
 
   await waitFor(() => {
     expect(ctx.logs).toSatisfyAny((line: string) =>
-      /^INFO impd\.imps imp=dev warmed the memory file in \d+ms: 955 blocks of 2 MiB$/u.test(line),
+      /^INFO impd\.imps imp=dev warmed the whole memory file in \d+ms: 955 blocks of 2 MiB$/u.test(
+        line,
+      ),
     );
   });
 });
@@ -1394,7 +1431,7 @@ test('it warms the memory file of no imp that slept on host pages', async () => 
 
   await waitFor(() => {
     expect(ctx.logs).toSatisfyAny((line: string) =>
-      line.startsWith('INFO impd.imps imp=dev warmed the memory file in '),
+      line.startsWith('INFO impd.imps imp=dev warmed the whole memory file in '),
     );
   });
 

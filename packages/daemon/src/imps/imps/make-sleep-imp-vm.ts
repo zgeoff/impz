@@ -19,6 +19,7 @@ import { readVmIdentity } from '../../vm/sleep/vm-identity';
 import type { VmIdentity } from '../../vm/sleep/vm-identity';
 import { waitForGuestAge } from '../../vm/sleep/wait-for-guest-age';
 import type { ImpPaths } from '../../vm/storage/build-imp-paths';
+import { dropTouchedBlocks, keepTouchedBlocks } from '../../vm/vmm/keep-touched-blocks';
 import { formatTimings } from './format-timings';
 import type { ImpContext } from './imp-context';
 import type { LockedImp } from './imp-lock';
@@ -134,6 +135,7 @@ export function makeSleepImpVm(
     };
 
     removeSnapshotMeta(paths);
+    dropTouchedBlocks(paths);
 
     const hasOomKill = startOomWatch(context.cgroups, imp.id);
 
@@ -143,6 +145,8 @@ export function makeSleepImpVm(
       const timings = await deps.withSleepSlot(() =>
         context.vms.sleepVm(pid, paths, cgroup, paths),
       );
+
+      keepTouchedBlocks(paths);
 
       const booted = readVmIdentity(paths);
 
@@ -232,7 +236,12 @@ export function makeSleepImpVm(
     // On ZFS a sleep leaves the new file out of the page cache, so the next
     // wake's handler would read each block cold.
     if (slept.isOnHugePages) {
-      context.memoryWarm?.start({ impID: imp.id, name: imp.name, memFile: paths.memFile });
+      context.memoryWarm?.start({
+        impID: imp.id,
+        name: imp.name,
+        memFile: paths.memFile,
+        blockList: paths.memTouched,
+      });
     }
 
     return sleeping;

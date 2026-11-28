@@ -12,14 +12,27 @@ const parsed = parseArgs({
     gid: { type: 'string' },
     'count-data': { type: 'string' },
     warm: { type: 'string' },
+    'count-blocks': { type: 'string' },
+    'warm-blocks': { type: 'string' },
   },
   allowPositionals: true,
   strict: true,
 });
 
-const [mode = 'serve', record = '', answerFile = ''] = parsed.positionals;
-const { 'count-data': countedFile, warm: warmedFile, ...options } = parsed.values;
-const memFile = warmedFile ?? countedFile;
+// the blocks modes take the block list as their value and the memory file as a
+// positional after the wrapper's three
+const [mode = 'serve', record = '', answerFile = '', positionalMemFile] = parsed.positionals;
+
+const {
+  'count-data': countedFile,
+  warm: warmedFile,
+  'count-blocks': countedBlocksList,
+  'warm-blocks': warmedBlocksList,
+  ...options
+} = parsed.values;
+
+const blockList = warmedBlocksList ?? countedBlocksList;
+const memFile = blockList === undefined ? (warmedFile ?? countedFile) : positionalMemFile;
 
 if (memFile === undefined) {
   const socket = options.socket ?? '';
@@ -48,19 +61,31 @@ if (memFile === undefined) {
     },
   });
 } else {
-  const warmMode = warmedFile === undefined ? '--count-data' : '--warm';
+  const isWarm = warmedFile !== undefined || warmedBlocksList !== undefined;
+  const warmMode = pickWarmMode(blockList !== undefined, isWarm);
   const answerText = existsSync(answerFile) ? readFileSync(answerFile, 'utf8') : '{}';
   const answer = StubWarmAnswerSchema.parse(JSON.parse(answerText));
 
   appendFileSync(
     `${record}.warms`,
-    `${JSON.stringify({ mode: warmMode, memFile, pid: process.pid })}\n`,
+    `${JSON.stringify({ mode: warmMode, memFile, blockList, pid: process.pid })}\n`,
   );
 
-  if (warmMode === '--warm' && answer.hangs) {
+  if (isWarm && answer.hangs) {
     // keeps the process alive, as a warm of a large file is, until impd kills it
     setInterval(() => {}, 60_000);
   } else {
     process.stdout.write(`${JSON.stringify({ blocks: answer.blocks })}\n`);
   }
+}
+
+function pickWarmMode(
+  isBlockList: boolean,
+  isWarm: boolean,
+): '--count-data' | '--warm' | '--count-blocks' | '--warm-blocks' {
+  if (isBlockList) {
+    return isWarm ? '--warm-blocks' : '--count-blocks';
+  }
+
+  return isWarm ? '--warm' : '--count-data';
 }
