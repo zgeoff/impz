@@ -23,16 +23,16 @@ in `create-verify-registry.ts`.
   also holds each file that impd reads but that you can't trace to a journey. Comment each entry
   with why it is there.
 - the feature's `packages`, each a package folder that its journey runs whole, such as
-  `packages/mcp`. List only the folder: `feature-paths.ts` adds the folder of each workspace package
-  it depends on at run time, from each `package.json` as it loads.
+  `packages/mcp`. List only the folder, because `feature-paths.ts` adds the folder of each workspace
+  package it depends on at run time, from each `package.json` as it loads.
 - the feature's `paths`, the globs for the parts of a package that its journey runs, such as the
-  image routes in `packages/daemon`. List only the globs: `feature-paths.ts` adds the folders of
-  that package's workspace dependencies itself, as for a package in `packages`.
+  image routes in `packages/daemon`. List only the globs, because `feature-paths.ts` adds the
+  folders of that package's workspace dependencies itself, as for a package in `packages`.
 
 When `feature-paths.ts` adds dependency folders, for a feature or for `corePaths`, it never adds a
 package that `corePaths` splits into globs, such as `packages/daemon`, as a whole folder. It also
-never adds `packages/mcp`: the CLI and impd import it at start, but only an MCP journey calls it.
-Name `packages/mcp` in the `packages` of each feature whose journey calls an MCP tool.
+never adds `packages/mcp`, because the CLI and impd import it at start but only an MCP journey calls
+it. Name `packages/mcp` in the `packages` of each feature whose journey calls an MCP tool.
 
 A journey reaches a path when its actions, its reads or the CLI commands it runs run that path, and
 so does each step that `bun verify up` runs before any journey, such as `impz login`. impd loads
