@@ -66,7 +66,7 @@ func (t *touchedBlocks) mark(offset int64) {
 // marks. A file shorter or longer than the memory file's blocks is not that
 // file's set, so it is refused.
 func readTouchedBlocks(path string, memSize int64) (map[int64]bool, error) {
-	raw, err := os.ReadFile(path) //nolint:gosec // G304: impd passes the block list it recorded, not input
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("block list: %w", err)
 	}

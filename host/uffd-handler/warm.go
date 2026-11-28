@@ -52,7 +52,7 @@ func parseWarmMode(args []string) (warmRequest, bool) {
 
 // runWarm writes one JSON line with the blocks it counted or read to out.
 func runWarm(req warmRequest, out io.Writer) error {
-	file, err := os.Open(req.memFile) //nolint:gosec // G703: impd passes the memory file of an imp it slept, not input
+	file, err := os.Open(req.memFile)
 	if err != nil {
 		return fmt.Errorf("memory file: %w", err)
 	}
