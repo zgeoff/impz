@@ -16,4 +16,4 @@ jobs:
   pr-title:
     permissions:
       contents: read
-    uses: zgeoff/tools/.github/workflows/pr-title-check.yml@3cc1f9a1f7821f650219aa999f5b6fd0bfaef1e9 # main
+    uses: zgeoff/tools/.github/workflows/pr-title-check.yml@9042ce644a43d9d2e65ea2c0c3d0829ffea36d58 # main
