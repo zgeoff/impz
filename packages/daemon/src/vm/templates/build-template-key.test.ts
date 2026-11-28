@@ -11,12 +11,19 @@ test('#TEMPLATE_BOOT_ARGS is the cmdline the agent reads as a template (agent/in
   );
 });
 
-test('#buildTemplateKey differs from the key a template built before the quiet console got', () => {
-  // the start of that key, from the boot args without quiet
-  const keyStartBeforeQuietConsole = '494b00d6b2ab4b48';
+test('#buildTemplateKey gives a fixed key for a fixed identity, so a change to the boot args changes it', () => {
+  const identity = buildMockHostIdentity({
+    firecrackerVersion: 'v1.0.0',
+    snapshotVersion: 'v1.0.0',
+    hostKernel: '6.1.0',
+    guestKernel: 'guest-kernel',
+    systemDrive: 'system-drive',
+    cpuModel: 'cpu-model',
+    cpuFlags: 'cpu-flags',
+  });
 
-  expect(buildTemplateKey(buildMockHostIdentity(), { vcpus: 1, memoryMib: 512 })).not.toStartWith(
-    keyStartBeforeQuietConsole,
+  expect(buildTemplateKey(identity, { vcpus: 1, memoryMib: 512 })).toBe(
+    '31a2abfed937cb01e1d7c2ba8bba0c76c836f0808e95263d22c7cc3528cf4dc1',
   );
 });
 
