@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.11.0](https://github.com/zgeoff/impz/compare/v7.10.0...v7.11.0) (2026-11-28)
+
+
+### Features
+
+* **vm:** warm recorded blocks in first-fault order up to the cap ([#1168](https://github.com/zgeoff/impz/issues/1168)) ([0e1eb85](https://github.com/zgeoff/impz/commit/0e1eb85e90e9707de76c6932b2469531c749a456))
+
 ## [7.10.0](https://github.com/zgeoff/impz/compare/v7.9.0...v7.10.0) (2026-11-28)
 
 ### Features
