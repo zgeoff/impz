@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { getErrorMessage } from '@impz/shared';
 import invariant from 'tiny-invariant';
 import { match } from 'ts-pattern';
@@ -20,10 +21,14 @@ interface WarmTarget {
   readonly impID: string;
   readonly name: string;
   readonly memFile: string;
+
+  // the file of the blocks that the imp's last wake served, which may not exist
+  readonly blockList: string;
 }
 
 export interface MemoryWarm {
-  // reads the memory file's data blocks into the page cache in the background,
+  // reads the blocks that the imp's last wake served, or with no record of
+  // them the memory file's data blocks, into the page cache in the background,
   // when they hold no more data than the cap
   readonly start: (target: Readonly<WarmTarget>) => void;
 
@@ -40,9 +45,18 @@ export interface MemoryWarmDeps {
   readonly run: CommandRunner;
 }
 
+// recorded: the data blocks among those that the last wake served;
+// whole: every data block of the file, when no record exists
+type WarmScope = 'recorded' | 'whole';
+
 type WarmOutcome =
-  | { readonly kind: 'warmed'; readonly blocks: number; readonly warmMs: number }
-  | { readonly kind: 'overCap'; readonly blocks: number }
+  | {
+      readonly kind: 'warmed';
+      readonly scope: WarmScope;
+      readonly blocks: number;
+      readonly warmMs: number;
+    }
+  | { readonly kind: 'overCap'; readonly scope: WarmScope; readonly blocks: number }
   | { readonly kind: 'ended'; readonly end: WarmEnd; readonly warmMs: number }
   | { readonly kind: 'closed' }
   | { readonly kind: 'failed'; readonly error: string };
@@ -59,6 +73,10 @@ interface RunningWarm {
   readonly done: Promise<void>;
 }
 
+type HandlerMode = '--count-data' | '--warm' | '--count-blocks' | '--warm-blocks';
+
+const WHOLE_MODES = { count: '--count-data', warm: '--warm' } as const;
+const RECORDED_MODES = { count: '--count-blocks', warm: '--warm-blocks' } as const;
 const WarmReportSchema = z.object({ blocks: z.int().nonnegative() });
 
 export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
@@ -69,32 +87,73 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
   const slots = createSemaphore(WARM_CONCURRENCY);
 
   const readBlocks = async (
-    mode: '--count-data' | '--warm',
-    memFile: string,
+    mode: HandlerMode,
+    target: Readonly<WarmTarget>,
     signal: AbortSignal,
   ): Promise<number> => {
     signal.throwIfAborted();
 
-    const argv = [deps.handlerBin, mode, memFile];
+    const argv = isBlockListMode(mode)
+      ? [deps.handlerBin, mode, target.blockList, target.memFile]
+      : [deps.handlerBin, mode, target.memFile];
 
     const stdout = await runChecked(argv, { signal }, deps.run);
 
     return WarmReportSchema.parse(JSON.parse(stdout)).blocks;
   };
 
-  const runWarm = async (memFile: string, signal: AbortSignal): Promise<WarmOutcome> => {
+  // a record that the handler refuses, such as one that a newer handler wrote
+  // and an older binary cannot read, counts the same as no record
+  const countBlocks = async (
+    target: Readonly<WarmTarget>,
+    signal: AbortSignal,
+  ): Promise<{ scope: WarmScope; blocks: number }> => {
+    if (existsSync(target.blockList)) {
+      try {
+        return {
+          scope: 'recorded',
+          blocks: await readBlocks(RECORDED_MODES.count, target, signal),
+        };
+      } catch (error) {
+        signal.throwIfAborted();
+
+        getImpdLogger('imps')
+          .with({ imp: target.name })
+          .warning(
+            'the recorded blocks of the memory file cannot be counted, so the whole file is: {error}',
+            {
+              error: getErrorMessage(error),
+            },
+          );
+      }
+    }
+
+    return { scope: 'whole', blocks: await readBlocks(WHOLE_MODES.count, target, signal) };
+  };
+
+  const runWarm = async (
+    target: Readonly<WarmTarget>,
+    signal: AbortSignal,
+  ): Promise<WarmOutcome> => {
     const startedMs = performance.now();
 
     try {
-      const blocks = await readBlocks('--count-data', memFile, signal);
+      const counted = await countBlocks(target, signal);
 
-      if (blocks * BLOCK_MIB > deps.capMib) {
-        return { kind: 'overCap', blocks };
+      if (counted.blocks * BLOCK_MIB > deps.capMib) {
+        return { kind: 'overCap', scope: counted.scope, blocks: counted.blocks };
       }
 
-      const read = await readBlocks('--warm', memFile, signal);
+      const modes = counted.scope === 'recorded' ? RECORDED_MODES : WHOLE_MODES;
 
-      return { kind: 'warmed', blocks: read, warmMs: Math.round(performance.now() - startedMs) };
+      const read = await readBlocks(modes.warm, target, signal);
+
+      return {
+        kind: 'warmed',
+        scope: counted.scope,
+        blocks: read,
+        warmMs: Math.round(performance.now() - startedMs),
+      };
     } catch (error) {
       return { kind: 'failed', error: getErrorMessage(error) };
     }
@@ -148,7 +207,7 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
 
         state.phase = 'running';
 
-        return runWarm(target.memFile, controller.signal);
+        return runWarm(target, controller.signal);
       };
 
       const runAndLog = async (): Promise<void> => {
@@ -179,17 +238,33 @@ export function createMemoryWarm(deps: Readonly<MemoryWarmDeps>): MemoryWarm {
   };
 }
 
+function isBlockListMode(mode: HandlerMode): boolean {
+  return mode === '--count-blocks' || mode === '--warm-blocks';
+}
+
 function logWarm(target: Readonly<WarmTarget>, outcome: WarmOutcome, capMib: number): void {
   const logger = getImpdLogger('imps').with({ imp: target.name });
 
   match(outcome)
-    .with({ kind: 'warmed' }, (warmed) => {
-      logger.info('warmed the memory file in {warmMs}ms: {blocks} blocks of 2 MiB', {
+    .with({ kind: 'warmed', scope: 'recorded' }, (warmed) => {
+      logger.info('warmed {blocks} recorded blocks of the memory file in {warmMs}ms', {
         warmMs: String(warmed.warmMs),
         blocks: String(warmed.blocks),
       });
     })
-    .with({ kind: 'overCap' }, (over) => {
+    .with({ kind: 'warmed', scope: 'whole' }, (warmed) => {
+      logger.info('warmed the whole memory file in {warmMs}ms: {blocks} blocks of 2 MiB', {
+        warmMs: String(warmed.warmMs),
+        blocks: String(warmed.blocks),
+      });
+    })
+    .with({ kind: 'overCap', scope: 'recorded' }, (over) => {
+      logger.info(
+        'left the memory file cold: its {dataMib} MiB of recorded blocks pass the warm cap of {capMib} MiB',
+        { dataMib: String(over.blocks * BLOCK_MIB), capMib: String(capMib) },
+      );
+    })
+    .with({ kind: 'overCap', scope: 'whole' }, (over) => {
       logger.info(
         'left the memory file cold: its {dataMib} MiB of data pass the warm cap of {capMib} MiB',
         { dataMib: String(over.blocks * BLOCK_MIB), capMib: String(capMib) },

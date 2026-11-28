@@ -62,7 +62,7 @@ func TestRunWarmReadsEachDataBlockIntoThePageCache(t *testing.T) {
 	perBlock := warmBlock / os.Getpagesize()
 	var out bytes.Buffer
 
-	err := runWarm(warm, path, &out)
+	err := runWarm(warmRequest{mode: warm, memFile: path}, &out)
 
 	assert.NilError(t, err)
 	assert.Equal(t, out.String(), "{\"blocks\":2}\n")
@@ -74,7 +74,7 @@ func TestRunWarmCountsTheDataBlocksWithNoRead(t *testing.T) {
 	path := writeSleptMemFile(t)
 	var out bytes.Buffer
 
-	err := runWarm(countData, path, &out)
+	err := runWarm(warmRequest{mode: countData, memFile: path}, &out)
 
 	assert.NilError(t, err)
 	assert.Equal(t, out.String(), "{\"blocks\":2}\n")
@@ -84,31 +84,121 @@ func TestRunWarmCountsTheDataBlocksWithNoRead(t *testing.T) {
 func TestRunWarmRefusesAMissingMemoryFile(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runWarm(warm, filepath.Join(t.TempDir(), "mem"), &out)
+	err := runWarm(warmRequest{mode: warm, memFile: filepath.Join(t.TempDir(), "mem")}, &out)
 
 	assert.ErrorContains(t, err, "memory file:")
 	assert.Equal(t, out.String(), "")
 }
 
-func TestParseWarmModeReadsAModeAndAPath(t *testing.T) {
+func TestParseWarmModeReadsAModeAndItsPaths(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		args []string
-		mode warmMode
-		path string
+		want warmRequest
 		ok   bool
 	}{
-		{"the warm", []string{"--warm", "/data/mem"}, warm, "/data/mem", true},
-		{"the count", []string{"--count-data", "/data/mem"}, countData, "/data/mem", true},
-		{"a serve", []string{"--socket", "/run/uffd.sock"}, "", "", false},
-		{"a mode with no path", []string{"--warm"}, "", "", false},
+		{"the warm", []string{"--warm", "/data/mem"}, warmRequest{mode: warm, memFile: "/data/mem"}, true},
+		{"the count", []string{"--count-data", "/data/mem"}, warmRequest{mode: countData, memFile: "/data/mem"}, true},
+		{"the warm of blocks", []string{"--warm-blocks", "/data/mem.touched", "/data/mem"}, warmRequest{mode: warmBlocks, blockList: "/data/mem.touched", memFile: "/data/mem"}, true},
+		{"the count of blocks", []string{"--count-blocks", "/data/mem.touched", "/data/mem"}, warmRequest{mode: countBlocks, blockList: "/data/mem.touched", memFile: "/data/mem"}, true},
+		{"a serve", []string{"--socket", "/run/uffd.sock"}, warmRequest{}, false},
+		{"a mode with no path", []string{"--warm"}, warmRequest{}, false},
+		{"a blocks mode with no list", []string{"--warm-blocks", "/data/mem"}, warmRequest{}, false},
+		{"a whole-file mode with a list", []string{"--warm", "/data/mem.touched", "/data/mem"}, warmRequest{}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			mode, path, ok := parseWarmMode(tc.args)
+			got, ok := parseWarmMode(tc.args)
 
-			assert.Equal(t, mode, tc.mode)
-			assert.Equal(t, path, tc.path)
+			assert.Equal(t, got, tc.want)
 			assert.Equal(t, ok, tc.ok)
 		})
 	}
+}
+
+// writeBlockList writes the file impd keeps: a byte per block of the three
+// block memory file, marked as given.
+func writeBlockList(t *testing.T, marks ...byte) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "mem.touched")
+	assert.NilError(t, os.WriteFile(path, marks, 0o600))
+	return path
+}
+
+func TestRunWarmOfBlocksReadsOnlyTheListedDataBlocks(t *testing.T) {
+	path := writeSleptMemFile(t)
+	perBlock := warmBlock / os.Getpagesize()
+	// the middle block is a hole, so only the last of the two listed has data
+	list := writeBlockList(t, 0, 1, 1)
+	var out bytes.Buffer
+
+	err := runWarm(warmRequest{mode: warmBlocks, blockList: list, memFile: path}, &out)
+
+	assert.NilError(t, err)
+	assert.Equal(t, out.String(), "{\"blocks\":1}\n")
+	cached := countCachedPages(t, path)
+	assert.DeepEqual(t, []int{cached[0], cached[2]}, []int{0, perBlock})
+}
+
+// writeContiguousMemFile writes a memory file of five 2 MiB blocks that all
+// hold data, so no hole ends the data that a read of one block can run into.
+func writeContiguousMemFile(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/var/tmp", "uffd-warm-")
+	assert.NilError(t, err)
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	path := filepath.Join(dir, "mem")
+	file, err := os.Create(path)
+	assert.NilError(t, err)
+	defer file.Close()
+	_, err = file.Write(bytesOf('a', 5*warmBlock))
+	assert.NilError(t, err)
+	assert.NilError(t, file.Sync())
+	assert.NilError(t, unix.Fadvise(int(file.Fd()), 0, 0, unix.FADV_DONTNEED))
+	return path
+}
+
+func TestRunWarmOfBlocksReadsNothingBesideTheListedBlocks(t *testing.T) {
+	path := writeContiguousMemFile(t)
+	perBlock := warmBlock / os.Getpagesize()
+	list := filepath.Join(t.TempDir(), "mem.touched")
+	assert.NilError(t, os.WriteFile(list, []byte{0, 0, 1, 0, 0}, 0o600))
+	var out bytes.Buffer
+
+	err := runWarm(warmRequest{mode: warmBlocks, blockList: list, memFile: path}, &out)
+
+	assert.NilError(t, err)
+	assert.Equal(t, out.String(), "{\"blocks\":1}\n")
+	assert.DeepEqual(t, countCachedPages(t, path), []int{0, 0, perBlock, 0, 0})
+}
+
+func TestRunCountBlocksCountsTheListedDataBlocksWithNoRead(t *testing.T) {
+	path := writeSleptMemFile(t)
+	list := writeBlockList(t, 1, 1, 0)
+	var out bytes.Buffer
+
+	err := runWarm(warmRequest{mode: countBlocks, blockList: list, memFile: path}, &out)
+
+	assert.NilError(t, err)
+	assert.Equal(t, out.String(), "{\"blocks\":1}\n")
+	assert.DeepEqual(t, countCachedPages(t, path), []int{0, 0, 0})
+}
+
+func TestRunWarmOfBlocksRefusesAListOfAnotherMemoryFile(t *testing.T) {
+	path := writeSleptMemFile(t)
+	list := writeBlockList(t, 1, 1)
+	var out bytes.Buffer
+
+	err := runWarm(warmRequest{mode: warmBlocks, blockList: list, memFile: path}, &out)
+
+	assert.ErrorContains(t, err, "block list: 2 blocks, but the memory file has 3")
+	assert.Equal(t, out.String(), "")
+}
+
+func TestRunWarmOfBlocksRefusesAMissingList(t *testing.T) {
+	path := writeSleptMemFile(t)
+	var out bytes.Buffer
+
+	err := runWarm(warmRequest{mode: warmBlocks, blockList: filepath.Join(t.TempDir(), "none"), memFile: path}, &out)
+
+	assert.ErrorContains(t, err, "block list:")
 }

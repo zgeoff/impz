@@ -15,10 +15,12 @@ export interface ImpPaths extends FirecrackerPaths {
   readonly uffdSocket: string;
   readonly uffdPidFile: string;
   readonly uffdStatsFile: string;
+  readonly uffdTouchedFile: string;
   readonly disk: string;
   readonly snapshotDir: string;
   readonly vmstate: string;
   readonly memFile: string;
+  readonly memTouched: string;
   readonly snapshotMeta: string;
 
   // sits outside the snapshot directory, which a cold boot clears
@@ -34,11 +36,12 @@ export interface ImagePaths {
 }
 
 // A 2 MiB guest's page handler listens, records its pid and counts its faults
-// in the run directory, beside its VM's sockets.
+// and marks the blocks it serves in the run directory, beside its VM's sockets.
 export const UFFD_RUN_FILES = {
   socket: 'uffd.sock',
   pidFile: 'uffd.pid',
   statsFile: 'uffd.stats',
+  touchedFile: 'uffd.touched',
 } as const;
 
 const DATA_DIRS = ['db', 'system', 'images', 'imps'] as const;
@@ -77,6 +80,7 @@ export function buildImpPaths(dataDir: string, impId: string): ImpPaths {
     uffdSocket: join(runDir, UFFD_RUN_FILES.socket),
     uffdPidFile: join(runDir, UFFD_RUN_FILES.pidFile),
     uffdStatsFile: join(runDir, UFFD_RUN_FILES.statsFile),
+    uffdTouchedFile: join(runDir, UFFD_RUN_FILES.touchedFile),
     ...buildSnapshotPaths(join(directory, 'snapshot')),
     vmIdentity: join(directory, 'vm.json'),
     checkpointsDir: join(directory, 'checkpoints'),
@@ -95,6 +99,9 @@ export function buildSnapshotPaths(snapshotDir: string) {
     snapshotDir,
     vmstate: join(snapshotDir, 'vmstate'),
     memFile: join(snapshotDir, 'mem'),
+
+    // the blocks that the page handler served before this memory file's sleep
+    memTouched: join(snapshotDir, 'mem.touched'),
     snapshotMeta: join(snapshotDir, 'meta.json'),
   };
 }

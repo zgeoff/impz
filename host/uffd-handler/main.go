@@ -2,7 +2,9 @@
 // file, on demand, through the userfaultfd that Firecracker's Uffd backend
 // sends it. impd starts one per VM that restores on 2 MiB pages. After a sleep
 // on 2 MiB pages, impd also runs it with --count-data and --warm, which read
-// the new memory file's data blocks into the page cache for the next wake.
+// the new memory file's data blocks into the page cache for the next wake, or
+// with --count-blocks and --warm-blocks, which do so for the blocks that the
+// last run served.
 package main
 
 import (
@@ -24,6 +26,10 @@ const memFileFD = 3
 // impd reads the handler's counts for a wake from this descriptor's file.
 const statsFD = 4
 
+// impd passes a file as this descriptor, for the handler to mark the blocks it
+// serves in, and keeps it for the next sleep's warm.
+const touchedFD = 5
+
 // Firecracker connects during its snapshot load, which impd sends right after
 // the socket appears.
 const acceptTimeout = 30 * time.Second
@@ -39,8 +45,8 @@ type options struct {
 }
 
 func main() {
-	if mode, path, ok := parseWarmMode(os.Args[1:]); ok {
-		if err := runWarm(mode, path, os.Stdout); err != nil {
+	if req, ok := parseWarmMode(os.Args[1:]); ok {
+		if err := runWarm(req, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "uffd-handler: %v\n", err)
 			os.Exit(1)
 		}
@@ -49,11 +55,11 @@ func main() {
 
 	opts, err := parseOptions(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE 4<>STATS_FILE\n       uffd-handler --count-data|--warm MEMORY_FILE\n", err)
+		fmt.Fprintf(os.Stderr, "uffd-handler: %v\nusage: uffd-handler --socket PATH [--uid UID --gid GID] 3<MEMORY_FILE 4<>STATS_FILE 5<>TOUCHED_FILE\n       uffd-handler --count-data|--warm MEMORY_FILE\n       uffd-handler --count-blocks|--warm-blocks BLOCK_LIST MEMORY_FILE\n", err)
 		os.Exit(2)
 	}
 
-	if err := run(opts, os.NewFile(memFileFD, "memory file"), os.NewFile(statsFD, "stats file")); err != nil {
+	if err := run(opts, os.NewFile(memFileFD, "memory file"), os.NewFile(statsFD, "stats file"), os.NewFile(touchedFD, "touched file")); err != nil {
 		fmt.Fprintf(os.Stderr, "uffd-handler: %v\n", err)
 		os.Exit(1)
 	}
@@ -88,7 +94,7 @@ func parseOptions(args []string) (options, error) {
 
 // run serves until Firecracker exits. Firecracker waits forever on a fault
 // that nothing answers, so once it has connected, any failure kills it.
-func run(opts options, memFile *os.File, statsFile *os.File) error {
+func run(opts options, memFile *os.File, statsFile *os.File, touchedFile *os.File) error {
 	source, err := openMemSource(memFile)
 	if err != nil {
 		return err
@@ -100,6 +106,16 @@ func run(opts options, memFile *os.File, statsFile *os.File) error {
 		return err
 	}
 	defer stats.close()
+
+	// a nil touched marks nothing
+	var touched *touchedBlocks
+	if touchedFile != nil {
+		touched, err = openTouchedBlocks(touchedFile, int64(len(source.mapped)))
+		if err != nil {
+			return err
+		}
+		defer touched.close()
+	}
 
 	listener, err := listen(opts.socket, opts.owner)
 	if err != nil {
@@ -119,7 +135,7 @@ func run(opts options, memFile *os.File, statsFile *os.File) error {
 	}
 	defer unix.Close(conn.pidfd)
 
-	err = serveConn(conn, source, stats)
+	err = serveConn(conn, source, stats, touched)
 	if err != nil {
 		// the peer may already be gone, which leaves nothing to stop
 		_ = unix.PidfdSendSignal(conn.pidfd, unix.SIGKILL, nil, 0)
@@ -127,12 +143,13 @@ func run(opts options, memFile *os.File, statsFile *os.File) error {
 	return err
 }
 
-func serveConn(conn peerConn, source *memSource, stats *handlerStats) error {
+func serveConn(conn peerConn, source *memSource, stats *handlerStats, touched *touchedBlocks) error {
 	defer unix.Close(conn.uffd)
 	h, err := newHandler(conn.uffd, conn.regions, source, stats)
 	if err != nil {
 		return err
 	}
+	h.touched = touched
 	return h.serve(conn.pidfd)
 }
 

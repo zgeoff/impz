@@ -1,7 +1,9 @@
 package main
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -130,6 +132,25 @@ func TestServeFaultCopiesNothingIntoAPageAnotherFaultCopied(t *testing.T) {
 
 	assert.NilError(t, err)
 	assert.Equal(t, second, copiedAlready)
+}
+
+func TestServeFaultMarksTheBlockBeforeItsCopy(t *testing.T) {
+	source, err := openMemSource(writeMemFile(t, t.TempDir()))
+	assert.NilError(t, err)
+	t.Cleanup(source.close)
+	file, err := os.Create(filepath.Join(t.TempDir(), "uffd.touched"))
+	assert.NilError(t, err)
+	touched, err := openTouchedBlocks(file, int64(len(source.mapped)))
+	assert.NilError(t, err)
+	t.Cleanup(touched.close)
+	regions := []guestRegion{{BaseHostVirtAddr: 0x10000, Size: testPage, PageSize: testPage}}
+	// no userfaultfd answers the copy, so the call fails after the mark it would leave
+	h := handler{uffd: -1, regions: regions, pageSize: testPage, source: source, touched: touched, data: map[int64]bool{}, zero: make([]byte, testPage)}
+
+	_, err = h.serveFault(0x10000)
+
+	assert.ErrorContains(t, err, "UFFDIO_COPY")
+	assert.DeepEqual(t, touched.mapped, []byte{1})
 }
 
 func TestNewHandlerRefusesRegionsOfMixedPageSizes(t *testing.T) {

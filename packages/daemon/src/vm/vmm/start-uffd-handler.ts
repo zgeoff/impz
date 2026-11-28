@@ -34,14 +34,19 @@ export async function startUffdHandler(plan: Readonly<UffdHandlerPlan>): Promise
 
   const memFd = openSync(plan.memFile, 'r');
   const statsFd = createZeroedFile(paths.uffdStatsFile, UFFD_STATS_BYTES);
+
+  // descriptor 5: the handler sizes the file to the memory file's blocks and marks
+  // each block it serves, and the next sleep keeps the marks for its warm
+  const touchedFd = createZeroedFile(paths.uffdTouchedFile, 0);
   const log = setupLogFile(paths.logFile);
 
   const child = Bun.spawn(buildSpawnArgv(command, plan.cgroup?.procsPath ?? null, null), {
-    stdio: ['ignore', log, log, memFd, statsFd],
+    stdio: ['ignore', log, log, memFd, statsFd, touchedFd],
   });
 
   closeSync(memFd);
   closeSync(statsFd);
+  closeSync(touchedFd);
   closeSync(log);
 
   child.unref();
@@ -70,6 +75,7 @@ export function removeUffdFiles(paths: Readonly<ImpPaths>): void {
   rmSync(`${paths.uffdSocket}.new`, { force: true });
   rmSync(paths.uffdPidFile, { force: true });
   rmSync(paths.uffdStatsFile, { force: true });
+  rmSync(paths.uffdTouchedFile, { force: true });
 }
 
 export interface UffdStats {

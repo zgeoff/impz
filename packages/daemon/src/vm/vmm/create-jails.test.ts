@@ -773,6 +773,7 @@ test("#seal keeps a page handler's socket, pid file and stats file in run/", asy
   writeFileSync(imp.paths.logFile, 'boot\n');
   writeFileSync(imp.paths.uffdPidFile, '4243\n');
   writeStubUffdStats(imp.paths.uffdStatsFile, { faults: 0, blocks: 0, serveNs: 0 });
+  writeFileSync(imp.paths.uffdTouchedFile, Buffer.from([1]));
 
   ctx.jails.seal(imp.paths, 4242);
 
@@ -782,6 +783,7 @@ test("#seal keeps a page handler's socket, pid file and stats file in run/", asy
     'uffd.pid',
     'uffd.sock',
     'uffd.stats',
+    'uffd.touched',
   ]);
 });
 

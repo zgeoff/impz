@@ -98,8 +98,10 @@ Firecracker restores a guest on huge pages only through userfaultfd (UFFD): it m
 memory empty and hands a page handler the file descriptor on which the kernel reports each fault.
 impd starts one handler per restore or wake, before Firecracker loads the snapshot.
 
-1. impd opens the snapshot's memory file, makes a zeroed stats file in the imp's run directory, and
-   starts the handler with both files as inherited descriptors, inside the imp's cgroup.
+1. impd opens the snapshot's memory file, makes a zeroed stats file and a zeroed file for the
+   [record of the blocks a wake served](#the-record-of-the-blocks-a-wake-served) in the imp's run
+   directory, and starts the handler with the three files as inherited descriptors, inside the imp's
+   cgroup.
 2. The handler binds its socket in the imp's run directory, which the jail binds in, owned by the
    jail's user, and drops its own privileges to that user.
 3. Firecracker connects at the load, sends the guest's memory regions and the UFFD descriptor, and
@@ -176,29 +178,56 @@ A template build on huge pages snapshots the same way, as a diff into an empty f
 
 ## The warm after a sleep
 
-After each sleep on huge pages, impd reads the new memory file's data blocks into the page cache, so
-that the next wake's handler copies them from memory. The warm matters most on ZFS: a sleep there
-writes the file into the ARC, ZFS's own cache, and leaves none of it in the page cache.
+After each sleep on huge pages, impd reads the blocks that the next wake will need into the page
+cache, so that the next wake's handler copies them from memory. The warm matters most on ZFS: a
+sleep there writes the file into the ARC, ZFS's own cache, and leaves none of it in the page cache,
+so each block the handler copies faults through ZFS.
 
-1. Once the imp is asleep, impd runs the handler's program, with no guest to serve, as
-   `uffd-handler --count-data <memory file>`. It counts the blocks of the file that hold data, one
-   block per huge page.
+A wake touches a small part of the file, so the warm reads only the blocks that the imp's last wake
+served. That keeps the copy in the page cache within the cap.
+
+### The record of the blocks a wake served
+
+Each wake's handler marks every block it serves, one block per huge page, in a file of one byte per
+block, which impd gives it as descriptor 5. When the imp sleeps, impd keeps the file as
+`snapshot/mem.touched`, beside the new memory file, so that it outlives the handler's run directory
+and an impd restart. A sleep drops the earlier record before it writes the new memory file. So the
+record always describes the file beside it, and a cold-booted imp, whose handler never ran, has
+none. Removing the snapshot removes the record.
+
+### The warm
+
+1. Once the imp is asleep, impd runs the handler's program, with no guest to serve. In the commands
+   below, `$MEMORY_FILE` is the new memory file and `$RECORD` is the record of the blocks a wake
+   served. With a record, impd runs `uffd-handler --count-blocks "$RECORD" "$MEMORY_FILE"`, which
+   counts the blocks on the record that hold data in the new file. With no record, it runs
+   `uffd-handler --count-data "$MEMORY_FILE"`, which counts every block of the file that holds data.
+   When the handler refuses the record, as a binary built before the record does, impd counts the
+   whole file as though no record existed.
 2. impd multiplies that count by the huge page size and compares the result with the cap that
-   `IMP_WARM_CAP_MIB` sets ([the configuration guide](../../guides/configuration.md#impd)). A file
+   `IMP_WARM_CAP_MIB` sets ([the configuration guide](../../guides/configuration.md#impd)). A set
    that holds more stays cold, so that one large imp never pushes the other imps' warmed files out
    of the page cache.
-3. For a file within the cap, impd runs `uffd-handler --warm <memory file>`, which reads each data
-   block through a map of the file, as a wake's handler reads it.
+3. For a count within the cap, impd runs the same program with
+   `uffd-handler --warm-blocks "$RECORD" "$MEMORY_FILE"` or `uffd-handler --warm "$MEMORY_FILE"`,
+   which reads each of those blocks through a map of the file, as a wake's handler reads it. The
+   recorded warm turns off the kernel's readahead on that map, which would otherwise read the blocks
+   beside a recorded one and pass the cap. A read with `pread` does not warm: on ZFS it fills the
+   ARC, not the page cache.
 
 A wake, a stop or a destroy of the imp ends its warm first. impd's own stop ends every warm and
 starts none after it. impd runs at most two warms at once, and a third waits for one of them to end.
 The kernel can take back the page cache that a warm filled, because nothing locks it, and a wake
 after that reads cold.
 
-impd logs the outcome of each warm in the journal, on a line with the imp's name:
+impd logs the outcome of each warm in the journal, on a line with the imp's name. The line says
+whether the warm read the recorded blocks or the whole file, and which size it compared with the
+cap:
 
 ```text
-warmed the memory file in 41ms: 27 blocks of 2 MiB
+warmed 64 recorded blocks of the memory file in 41ms
+warmed the whole memory file in 41ms: 27 blocks of 2 MiB
+left the memory file cold: its 258 MiB of recorded blocks pass the warm cap of 256 MiB
 left the memory file cold: its 3862 MiB of data pass the warm cap of 2048 MiB
 stopped the memory file's warm after 12ms: the imp woke
 ```

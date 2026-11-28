@@ -60,6 +60,7 @@ type uffdioRegisterArg struct {
 func TestMain(m *testing.M) {
 	if os.Getenv(handlerModeEnv) != "" {
 		main()
+		os.Exit(0)
 	}
 	if socket := os.Getenv(peerSocketEnv); socket != "" {
 		if err := runPeer(socket); err != nil {
@@ -162,6 +163,15 @@ func writeStatsFile(t *testing.T, dir string) *os.File {
 	return file
 }
 
+// writeTouchedFile writes the empty file that impd hands the handler to mark
+// the blocks it serves in.
+func writeTouchedFile(t *testing.T, dir string) *os.File {
+	t.Helper()
+	file, err := os.OpenFile(filepath.Join(dir, "uffd.touched"), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
+	assert.NilError(t, err)
+	return file
+}
+
 func bytesOf(b byte, n int) []byte {
 	out := make([]byte, n)
 	for i := range out {
@@ -221,10 +231,10 @@ func readPeerBytes(t *testing.T, p peer, n int) []byte {
 	return out
 }
 
-func startRun(t *testing.T, opts options, memFile *os.File, statsFile *os.File) chan error {
+func startRun(t *testing.T, opts options, memFile *os.File, statsFile *os.File, touchedFile *os.File) chan error {
 	t.Helper()
 	done := make(chan error, 1)
-	go func() { done <- run(opts, memFile, statsFile) }()
+	go func() { done <- run(opts, memFile, statsFile, touchedFile) }()
 	return done
 }
 
@@ -233,7 +243,7 @@ func TestRunServesTheMemoryFileUntilItsPeerExits(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	socket := "uffd.sock"
-	done := startRun(t, options{socket: socket}, writeMemFile(t, dir), writeStatsFile(t, dir))
+	done := startRun(t, options{socket: socket}, writeMemFile(t, dir), writeStatsFile(t, dir), nil)
 	p := startPeer(t, socket, testPages, "0,1,2")
 
 	read := readPeerBytes(t, p, testPages)
@@ -250,7 +260,7 @@ func TestRunCountsTheFaultsItServesAndTheDataBlocksItReads(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	socket := "uffd.sock"
-	done := startRun(t, options{socket: socket}, writeMemFile(t, dir), writeStatsFile(t, dir))
+	done := startRun(t, options{socket: socket}, writeMemFile(t, dir), writeStatsFile(t, dir), nil)
 	p := startPeer(t, socket, testPages, "0,1,2")
 	readPeerBytes(t, p, testPages)
 	p.stdin.Close()
@@ -265,12 +275,90 @@ func TestRunCountsTheFaultsItServesAndTheDataBlocksItReads(t *testing.T) {
 	assert.Assert(t, binary.LittleEndian.Uint64(raw[16:24]) > 0, "no serve time in %v", raw)
 }
 
+func TestRunMarksTheBlocksItServesInTheTouchedFile(t *testing.T) {
+	// a socket path has a 108-byte limit, which a TMPDIR can pass
+	dir := t.TempDir()
+	t.Chdir(dir)
+	socket := "uffd.sock"
+	touched, err := os.OpenFile(filepath.Join(dir, "uffd.touched"), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
+	assert.NilError(t, err)
+	// a record that an earlier run left is not this run's
+	_, err = touched.WriteAt(bytesOf(1, 5), 0)
+	assert.NilError(t, err)
+	done := startRun(t, options{socket: socket}, writeMemFile(t, dir), writeStatsFile(t, dir), touched)
+	p := startPeer(t, socket, testPages, "0,2")
+	readPeerBytes(t, p, 2)
+	p.stdin.Close()
+	assert.NilError(t, p.cmd.Wait())
+	assert.NilError(t, <-done)
+
+	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
+
+	assert.NilError(t, err)
+	assert.DeepEqual(t, raw, []byte{1})
+}
+
+func TestTheHandlerMarksTheBlocksItServesInTheFileImpdPassesAsDescriptor5(t *testing.T) {
+	// a socket path has a 108-byte limit, which a TMPDIR can pass
+	dir := t.TempDir()
+	t.Chdir(dir)
+	self, err := os.Executable()
+	assert.NilError(t, err)
+	touched, err := os.OpenFile(filepath.Join(dir, "uffd.touched"), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
+	assert.NilError(t, err)
+	cmd := exec.Command(self, "--socket", "uffd.sock")
+	cmd.Env = append(os.Environ(), handlerModeEnv+"=1")
+	cmd.Stderr = os.Stderr
+	// impd's descriptors 3, 4 and 5, in the order it passes them
+	cmd.ExtraFiles = []*os.File{writeMemFile(t, dir), writeStatsFile(t, dir), touched}
+	assert.NilError(t, cmd.Start())
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+	p := startPeer(t, "uffd.sock", testPages, "0,2")
+	readPeerBytes(t, p, 2)
+	p.stdin.Close()
+	assert.NilError(t, cmd.Wait())
+
+	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
+
+	assert.NilError(t, err)
+	assert.DeepEqual(t, raw, []byte{1})
+}
+
+func TestTouchedBlocksMarkTheBlockOfAnOffset(t *testing.T) {
+	dir := t.TempDir()
+	file, err := os.Create(filepath.Join(dir, "uffd.touched"))
+	assert.NilError(t, err)
+	touched, err := openTouchedBlocks(file, 5*warmBlock-1)
+	assert.NilError(t, err)
+	t.Cleanup(touched.close)
+
+	touched.mark(0)
+	touched.mark(warmBlock + 4096)
+	touched.mark(4*warmBlock + 8192)
+	// the file's own bound is the last block, and an offset past it marks nothing
+	touched.mark(9 * warmBlock)
+
+	raw, err := os.ReadFile(filepath.Join(dir, "uffd.touched"))
+	assert.NilError(t, err)
+	assert.DeepEqual(t, raw, []byte{1, 1, 0, 0, 1})
+}
+
+func TestARunWithNoTouchedFileMarksNothing(t *testing.T) {
+	var touched *touchedBlocks
+
+	touched.mark(0)
+	touched.close()
+}
+
 func TestRunKillsItsPeerOnAFaultItCannotServe(t *testing.T) {
 	// a socket path has a 108-byte limit, which a TMPDIR can pass
 	dir := t.TempDir()
 	t.Chdir(dir)
 	socket := "uffd.sock"
-	done := startRun(t, options{socket: socket}, writeMemFile(t, dir), writeStatsFile(t, dir))
+	done := startRun(t, options{socket: socket}, writeMemFile(t, dir), writeStatsFile(t, dir), nil)
 	p := startPeer(t, socket, 2, "2")
 
 	peerErr := p.cmd.Wait()
@@ -286,7 +374,7 @@ func TestRunKillsAPeerWhoseRegionsPassTheMemoryFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 	socket := "uffd.sock"
-	done := startRun(t, options{socket: socket}, writeMemFile(t, dir), writeStatsFile(t, dir))
+	done := startRun(t, options{socket: socket}, writeMemFile(t, dir), writeStatsFile(t, dir), nil)
 	p := startPeer(t, socket, testPages+1, "0")
 
 	peerErr := p.cmd.Wait()
@@ -302,7 +390,7 @@ func TestRunRefusesAnEmptyMemoryFile(t *testing.T) {
 	file, err := os.Create(filepath.Join(dir, "mem"))
 	assert.NilError(t, err)
 
-	err = run(options{socket: filepath.Join(dir, "uffd.sock")}, file, writeStatsFile(t, dir))
+	err = run(options{socket: filepath.Join(dir, "uffd.sock")}, file, writeStatsFile(t, dir), nil)
 
 	assert.ErrorContains(t, err, "not a regular file with data")
 }
@@ -312,7 +400,7 @@ func TestRunRefusesAStatsFileOfAnotherSize(t *testing.T) {
 	stats, err := os.Create(filepath.Join(dir, "uffd.stats"))
 	assert.NilError(t, err)
 
-	err = run(options{socket: filepath.Join(dir, "uffd.sock")}, writeMemFile(t, dir), stats)
+	err = run(options{socket: filepath.Join(dir, "uffd.sock")}, writeMemFile(t, dir), stats, nil)
 
 	assert.ErrorContains(t, err, "not a regular file of 24 bytes")
 }

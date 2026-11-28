@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"runtime"
+
+	"golang.org/x/sys/unix"
 )
 
 // warmBlock is the page the guest's memory is served in on the 2 MiB path,
@@ -14,32 +16,43 @@ const warmBlock = 2 << 20
 
 // warmMode is how impd runs the handler for a slept imp's memory file:
 // countData only lists its data blocks, and warm also reads each one through
-// a map of the file, so the page cache holds it at the next wake.
+// a map of the file, so the page cache holds it at the next wake. The two
+// blocks modes take a list of the blocks that a wake served, and do the same
+// for the data blocks on that list alone.
 type warmMode string
 
 const (
-	countData warmMode = "--count-data"
-	warm      warmMode = "--warm"
+	countData   warmMode = "--count-data"
+	warm        warmMode = "--warm"
+	countBlocks warmMode = "--count-blocks"
+	warmBlocks  warmMode = "--warm-blocks"
 )
+
+// warmRequest is one run of a warm mode.
+type warmRequest struct {
+	mode warmMode
+	// the file of served blocks, for the blocks modes alone
+	blockList string
+	memFile   string
+}
 
 type warmReport struct {
 	Blocks int `json:"blocks"`
 }
 
-func parseWarmMode(args []string) (warmMode, string, bool) {
-	if len(args) != 2 {
-		return "", "", false
+func parseWarmMode(args []string) (warmRequest, bool) {
+	if len(args) == 2 && (warmMode(args[0]) == countData || warmMode(args[0]) == warm) {
+		return warmRequest{mode: warmMode(args[0]), memFile: args[1]}, true
 	}
-	mode := warmMode(args[0])
-	if mode != countData && mode != warm {
-		return "", "", false
+	if len(args) == 3 && (warmMode(args[0]) == countBlocks || warmMode(args[0]) == warmBlocks) {
+		return warmRequest{mode: warmMode(args[0]), blockList: args[1], memFile: args[2]}, true
 	}
-	return mode, args[1], true
+	return warmRequest{}, false
 }
 
-// runWarm writes one JSON line with the file's data blocks to out.
-func runWarm(mode warmMode, path string, out io.Writer) error {
-	file, err := os.Open(path) //nolint:gosec // G703: impd passes the memory file of an imp it slept, not input
+// runWarm writes one JSON line with the blocks it counted or read to out.
+func runWarm(req warmRequest, out io.Writer) error {
+	file, err := os.Open(req.memFile)
 	if err != nil {
 		return fmt.Errorf("memory file: %w", err)
 	}
@@ -53,10 +66,35 @@ func runWarm(mode warmMode, path string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if mode == warm {
+	if req.mode == countBlocks || req.mode == warmBlocks {
+		listed, err := readTouchedBlocks(req.blockList, int64(len(source.mapped)))
+		if err != nil {
+			return err
+		}
+		blocks = intersect(blocks, listed)
+	}
+	if req.mode == warmBlocks {
+		// the kernel would read ahead into the blocks that the list leaves out
+		if err := unix.Madvise(source.mapped, unix.MADV_RANDOM); err != nil {
+			return fmt.Errorf("memory file: madvise: %w", err)
+		}
+	}
+	if req.mode == warm || req.mode == warmBlocks {
 		source.readThroughMap(blocks, os.Getpagesize())
 	}
 	return json.NewEncoder(out).Encode(warmReport{Blocks: len(blocks)})
+}
+
+// intersect keeps the blocks of data that the list holds: a block of the list
+// that is a hole in this file has nothing to read.
+func intersect(data map[int64]bool, listed map[int64]bool) map[int64]bool {
+	kept := map[int64]bool{}
+	for offset := range listed {
+		if data[offset] {
+			kept[offset] = true
+		}
+	}
+	return kept
 }
 
 // readThroughMap faults in each page of the blocks through the map, as the
